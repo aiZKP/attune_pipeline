@@ -715,7 +715,7 @@
     holder.append(tip);
     return {
       show(x, y, title, rows) {
-        tip.replaceChildren(h("div", { class: "h", text: title }), rows.map((r) => h("div", { class: "r" },
+        tip.replaceChildren(h("div", { class: "h", text: title }), ...rows.map((r) => h("div", { class: "r" },
           h("span", { class: "key" }, r.color ? h("i", { style: null }) : null, r.label), h("b", { text: r.value }))));
         // colour the line keys after creation (no inline style attribute in CSP-strict markup)
         const keys = tip.querySelectorAll(".key i");
@@ -753,7 +753,7 @@
     if (!rows || !rows.length) { holder.append(h("div", { class: "empty", text: "No verdicts yet — calibration (R-0001…R-0006) runs first." })); return; }
     const items = rows.slice(-40);
     const margin = (STATE.config && STATE.config.verdict && STATE.config.verdict.margin_points) || 3;
-    const H = 260, m = { l: 40, r: 12, t: 12, b: 40 };
+    const H = 300, m = { l: 40, r: 58, t: 12, b: 40 };
     let lo = -5, hi = margin + 3;
     items.forEach((d) => { const c = d.ci || [d.delta, d.delta]; lo = Math.min(lo, c[0], d.delta); hi = Math.max(hi, c[1], d.delta); });
     const pad = (hi - lo) * 0.06; lo -= pad; hi += pad;
@@ -768,7 +768,8 @@
     });
     if (lo < 0 && hi > 0) svgEl.append(s("line", { class: "base", x1: m.l, x2: W - m.r, y1: y(0), y2: y(0) }));
     svgEl.append(s("line", { class: "ref", x1: m.l, x2: W - m.r, y1: y(margin), y2: y(margin) }));
-    svgEl.append(s("text", { class: "lab", x: W - m.r, y: y(margin) - 5, "text-anchor": "end" }, "crown margin +" + margin));
+    svgEl.append(s("text", { class: "lab", x: W - m.r + 6, y: y(margin) - 2 }, "margin"));
+    svgEl.append(s("text", { class: "lab", x: W - m.r + 6, y: y(margin) + 12 }, "+" + margin + " pts"));
     const accent = cssVar("--accent"), surface = cssVar("--surface-1");
     const every = Math.max(1, Math.ceil(items.length / Math.max(1, Math.floor(iw / 56))));
     const tip = tipLayer(holder);
