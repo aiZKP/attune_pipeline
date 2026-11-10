@@ -99,6 +99,7 @@ header.top {
 .btn.primary { background: var(--accent); border-color: transparent; color: #fff; }
 .btn.primary:hover { filter: brightness(1.08); }
 .btn.small { padding: 3px 9px; font-size: 12px; }
+.btn[aria-disabled="true"], a.btn:not([href]) { opacity: 0.45; pointer-events: none; }
 
 /* public crown strip */
 .crown {
