@@ -1,0 +1,79 @@
+{
+  "king": {
+    "key": "e42094662be6fdb7",
+    "place": 1,
+    "repo": "rawberry12/vector-l3-v12",
+    "revision": "a506099a1591f29834907564273a66ab2325c596",
+    "sha256": "70dea935d4562c9e6b33fefc9c1b5da4d0eb3942f14512e9dd28a5c9e63deec4",
+    "weights": true
+  },
+  "kings": [
+    {
+      "key": "e42094662be6fdb7",
+      "place": 1,
+      "repo": "rawberry12/vector-l3-v12",
+      "revision": "a506099a1591f29834907564273a66ab2325c596",
+      "sha256": "70dea935d4562c9e6b33fefc9c1b5da4d0eb3942f14512e9dd28a5c9e63deec4",
+      "weights": true
+    },
+    {
+      "key": "ab2e27bf819b2de3",
+      "place": 2,
+      "repo": "rawberry12/vector-l3-v11",
+      "revision": "dfcb7e544a4cdb4eef70fae4c1ad09119ebf8ebd",
+      "sha256": "c75a54b34243070aec666452cfebb2fb5cf9de825e4d9f71df00dff58efa40d8",
+      "weights": true
+    },
+    {
+      "key": "6c9112950bc7b1a3",
+      "place": 3,
+      "repo": "golden217/attune-l4b",
+      "revision": "527c7e490203fa39e04d18128fd8955d1783d232",
+      "sha256": "74e1185a9a4a7022b99c6952ac0176ca8c5eb7be05400bfc20bb36279faa2659",
+      "weights": true
+    },
+    {
+      "key": "9cf69f54984ddd87",
+      "place": 4,
+      "repo": "golden217/attune-l4a",
+      "revision": "bbc5d7d8872cff1da33e07b9391ea040a044d1a2",
+      "sha256": "703ee487cac544ca2c9d131cfab74523dd8bb1911478e15bc88bed1e5b6136b9",
+      "weights": true
+    }
+  ],
+  "kings_commit": "4f6e96fc0389c9235fd20b51bf1b0166e15a67ab",
+  "level": 4,
+  "spec": {
+    "version": 4,
+    "sha": "9b14b234bf3bd5ea4aa4d0a06632647927550314",
+    "level": 4,
+    "margin": 3.0,
+    "max_void": 0.2,
+    "runs_per_task": 15,
+    "step_ratio": 2,
+    "tasks": 16,
+    "architecture": "vector_v1.1"
+  },
+  "heads": {
+    "vector-orchestrator": {
+      "sha": "9b14b234bf3bd5ea4aa4d0a06632647927550314",
+      "date": "2026-11-09T05:54:49Z",
+      "message": "feat(spec): start level 4",
+      "branch": "main"
+    },
+    "RoboTwin-Vector": {
+      "sha": "e87619a4191409ce57d31e6b73f8cbce0a166ccc",
+      "date": "2026-10-07T17:29:40Z",
+      "message": "fix(data): restore the image codec, data/decode_image_bit.py",
+      "branch": "vector"
+    },
+    "attune-subnet": {
+      "sha": "c63564d7fc7d43139b0d7f131c91e6cf177ac57c",
+      "date": "2026-11-10T09:11:17Z",
+      "message": "feat(kings): an optional kings_owner puts the kings repository under another account",
+      "branch": "main"
+    }
+  },
+  "checked_at": "2026-11-10T14:04:32Z",
+  "changed_at": "2026-11-10T14:04:32Z"
+}
