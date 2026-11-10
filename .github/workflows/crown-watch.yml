@@ -1,0 +1,46 @@
+name: crown-watch
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: crown-watch
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Checkout scripts (main)
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: main
+      - name: Checkout data branch
+        uses: actions/checkout@v4
+        with:
+          ref: data
+          path: data
+      - name: Snapshot public competition state
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 main/.github/scripts/crown_watch.py data
+      - name: Commit if anything changed
+        working-directory: data
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            git config user.name "crown-watch[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add crown.json crown-history.json
+            git commit -m "crown-watch $(date -u +%Y-%m-%dT%H:%MZ)"
+            for i in 1 2 3; do
+              git push && break
+              git pull --rebase origin data
+            done
+          fi
