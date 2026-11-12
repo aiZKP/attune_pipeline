@@ -332,7 +332,8 @@
       .filter((e) => e.verdict && isNum(e.verdict.delta_points))
       .map((e) => ({
         id: e.id, method: e.method, cls: e.verdict.class, delta: e.verdict.delta_points, ci: e.verdict.ci,
-        pwin: e.verdict.p_win_duel, n: e.verdict.n_paired, tier: e.tier, at: e.updated || e.created,
+        pwin: e.verdict.ticket && isNum(e.verdict.ticket.p_win) ? e.verdict.ticket.p_win : e.verdict.p_win_duel,
+        ticket: e.verdict.ticket || null, n: e.verdict.n_paired, tier: e.tier, at: e.updated || e.created,
         current: e.verdict.king_is_current !== false, v: e.verdict, e,
       }))
       .sort((a, b) => String(a.at).localeCompare(String(b.at)) || a.id.localeCompare(b.id));
@@ -370,6 +371,18 @@
       h("div", { class: "value" + (opts.hero ? " hero" : "") + (opts.small ? " small" : "") }, value),
       sub ? h("div", { class: "sub" }, sub) : null);
   }
+  // A fixed, hourly-billed pod budget (config.budget): what is left is a function of the clock alone.
+  function budgetNow() {
+    const b = STATE.config && STATE.config.budget;
+    if (!b || !isNum(b.usd_at_rent) || !isNum(b.usd_per_hour) || b.usd_per_hour <= 0) return null;
+    const t0 = Date.parse(b.rented_at);
+    if (isNaN(t0)) return null;
+    const usd = Math.max(0, b.usd_at_rent - Math.max(0, (Date.now() - t0) / 3.6e6) * b.usd_per_hour);
+    const end = Date.parse(b.sprint_end);
+    return { usd, hours: usd / b.usd_per_hour, rate: b.usd_per_hour,
+      toEnd: isNaN(end) ? null : Math.max(0, (end - Date.now()) / 3.6e6) };
+  }
+  const tao = (x) => (isNum(x) ? (x >= 0 ? "+" : "−") + Math.abs(x).toFixed(1) + " TAO" : "—");
   function kpis() {
     const rows = verdictRows();
     const best = bestRow(rows);
@@ -378,17 +391,28 @@
     const count = (st) => ms.filter((m) => st.indexOf(m.status) >= 0).length;
     const queue = ((STATE.queue || {}).items || []).map((q) => q.id);
     const gpu = STATE.runtime || {};
+    const bud = budgetNow();
+    const margin = (STATE.config && STATE.config.verdict && STATE.config.verdict.margin_points) || 3;
+    const tk = best && best.ticket;
+    const gpuUsed = (isNum(gpu.gpu_hours_used_total) ? gpu.gpu_hours_used_total.toFixed(1) + " GPU-h used" : "") +
+      ((gpu.jobs || []).length ? " · " + gpu.jobs.length + " job(s)" : "") + (gpu.updated ? " · " + ago(gpu.updated) : "");
     return h("section", { class: "kpis", "aria-label": "Key numbers" },
-      tile("Best Δ vs the current king", best ? pts(best.delta) + " pts" : "—",
-        best ? [best.id + " · " + best.method + " · ", chip(best.cls.toLowerCase())] : "No verdict yet against the current king",
+      tile("Best Δ vs the current king", best ? pts(tk && isNum(tk.delta_points) ? tk.delta_points : best.delta) + " pts" : "—",
+        best ? [best.id + " · " + best.method + " · " + (tk ? tk.units + " units (" + tk.basis + ") · " : ""), chip(best.cls.toLowerCase())]
+          : "No verdict yet against the current king",
         { hero: true }),
-      tile("Win chance of the best", best ? pct(best.pwin) : "—", "Simulated 16×15 duel, crown at +" + ((STATE.config && STATE.config.verdict && STATE.config.verdict.margin_points) || 3) + " pts"),
+      tile("Win chance of the best", best ? pct(best.pwin) : "—",
+        tk && isNum(tk.ev_tao)
+          ? "One entry is worth " + tao(tk.ev_tao) + " (crown ≈ " + tk.crown_value_tao + " TAO, fee " + tk.burn_tao + ")"
+          : "Simulated 16×15 duel, crown at +" + margin + " pts"),
       tile("Reigning king", (comp.king && comp.king.repo) || "—", "Level " + (comp.level !== undefined ? comp.level : "—") + " · seen " + ago(comp.king_since && comp.king_since.first_seen), { small: true }),
       tile("Pipeline", count(["running"]) + " running · " + queue.length + " queued",
         queue.length ? "Next: " + queue.slice(0, 3).join(", ") : "Queue empty", { small: true }),
-      tile("GPU box", h("span", null, chip(gpu.box || "off")),
-        (isNum(gpu.gpu_hours_used_total) ? gpu.gpu_hours_used_total.toFixed(1) + " GPU-h used" : "") +
-        ((gpu.jobs || []).length ? " · " + gpu.jobs.length + " job(s)" : "") + (gpu.updated ? " · " + ago(gpu.updated) : "")),
+      bud
+        ? tile("Pod budget left", h("span", null, "$" + bud.usd.toFixed(0) + " · " + bud.hours.toFixed(1) + " h ", chip(gpu.box || "off")),
+            "$" + bud.rate.toFixed(2) + "/h, busy or idle" + (bud.toEnd !== null ? " · sprint ends in " + bud.toEnd.toFixed(1) + " h" : "") +
+            ((gpu.jobs || []).length ? " · " + gpu.jobs.length + " job(s)" : ""), { small: true })
+        : tile("GPU box", h("span", null, chip(gpu.box || "off")), gpuUsed),
     );
   }
 
@@ -593,6 +617,9 @@
       h("span", { class: "k", text: "Sanity" }), h("span", null, Object.keys(sanity).length ? Object.keys(sanity).map((k) => h("span", { class: "tag", text: (sanity[k] === true ? "✓ " : sanity[k] === false ? "✕ " : "· ") + k })) : "—"),
       v ? h("span", { class: "k", text: "Verdict" }) : null, v ? h("span", null, chip((v.class || "").toLowerCase()), " Δ " + pts(v.delta_points) + " pts, SE " + (isNum(v.se_points) ? v.se_points.toFixed(2) : "—") + ", P(Δ>0) " + pct(v.p_delta_gt0) + ", P(win) " + pct(v.p_win_duel)) : null,
       v && v.holdout ? h("span", { class: "k", text: "Holdout" }) : null, v && v.holdout ? h("span", { text: (v.holdout.pool || "") + ": Δ " + pts(v.holdout.delta_points) + " pts on " + v.holdout.n_paired + " units, P(win) " + pct(v.holdout.p_win_duel) }) : null,
+      v && v.pooled ? h("span", { class: "k", text: "Dev + holdout" }) : null, v && v.pooled ? h("span", { text: "Δ " + pts(v.pooled.delta_points) + " pts on " + v.pooled.n_paired + " units, P(Δ>0) " + pct(v.pooled.p_delta_gt0) + ", P(win) " + pct(v.pooled.p_win_duel) }) : null,
+      v && v.ticket ? h("span", { class: "k", text: "One entry" }) : null, v && v.ticket ? h("span", { text: "worth " + tao(v.ticket.ev_tao) + " = P(win) " + pct(v.ticket.p_win) + " × " + v.ticket.crown_value_tao + " TAO − " + v.ticket.burn_tao + " TAO fee (from " + v.ticket.basis + ")" }) : null,
+      v && v.partial ? h("span", { class: "k", text: "Stopped early" }) : null, v && v.partial ? h("span", { text: v.partial.tasks_evaluated.length + " of " + (v.partial.tasks_evaluated.length + v.partial.tasks_missing.length) + " tasks run; Δ is in points of the full score, tasks not run counted as 0" }) : null,
       v && v.reasons ? h("span", { class: "k", text: "Reasons" }) : null, v && v.reasons ? h("span", { text: v.reasons.join(" · ") }) : null,
       e.reason ? h("span", { class: "k", text: "Note" }) : null, e.reason ? h("span", { text: e.reason }) : null);
     return h("div", { class: "grid2 detail" },
