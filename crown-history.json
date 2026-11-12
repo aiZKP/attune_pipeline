@@ -6,6 +6,13 @@
       "from": "rawberry12/vector-l3-v12",
       "to": "smol2room/vector-l4-ft5",
       "key": "cf6420526d912b43"
+    },
+    {
+      "at": "2026-11-12T19:02:15Z",
+      "kind": "crown",
+      "from": "smol2room/vector-l4-ft5",
+      "to": "fremuo/vector-fl4-ft",
+      "key": "ebd6faff98e81d8a"
     }
   ]
 }

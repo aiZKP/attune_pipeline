@@ -1,16 +1,24 @@
 {
   "king": {
-    "key": "cf6420526d912b43",
+    "key": "ebd6faff98e81d8a",
     "place": 1,
-    "repo": "smol2room/vector-l4-ft5",
-    "revision": "e88d44a200ca2fb701503a903a939352b90b6c1c",
-    "sha256": "1d63229dd25c2d162ea478d00622322ac90a5608d656f8bb15420402611abc9b",
+    "repo": "fremuo/vector-fl4-ft",
+    "revision": "c435ecea79502cc28dcb8fd827d365664b783808",
+    "sha256": "03eab1b488d358cb5e362a06c1632861eee25fe521e3304ddb880a4eaba55724",
     "weights": true
   },
   "kings": [
     {
-      "key": "cf6420526d912b43",
+      "key": "ebd6faff98e81d8a",
       "place": 1,
+      "repo": "fremuo/vector-fl4-ft",
+      "revision": "c435ecea79502cc28dcb8fd827d365664b783808",
+      "sha256": "03eab1b488d358cb5e362a06c1632861eee25fe521e3304ddb880a4eaba55724",
+      "weights": true
+    },
+    {
+      "key": "cf6420526d912b43",
+      "place": 2,
       "repo": "smol2room/vector-l4-ft5",
       "revision": "e88d44a200ca2fb701503a903a939352b90b6c1c",
       "sha256": "1d63229dd25c2d162ea478d00622322ac90a5608d656f8bb15420402611abc9b",
@@ -18,7 +26,7 @@
     },
     {
       "key": "e42094662be6fdb7",
-      "place": 2,
+      "place": 3,
       "repo": "rawberry12/vector-l3-v12",
       "revision": "a506099a1591f29834907564273a66ab2325c596",
       "sha256": "70dea935d4562c9e6b33fefc9c1b5da4d0eb3942f14512e9dd28a5c9e63deec4",
@@ -26,22 +34,14 @@
     },
     {
       "key": "ab2e27bf819b2de3",
-      "place": 3,
+      "place": 4,
       "repo": "rawberry12/vector-l3-v11",
       "revision": "dfcb7e544a4cdb4eef70fae4c1ad09119ebf8ebd",
       "sha256": "c75a54b34243070aec666452cfebb2fb5cf9de825e4d9f71df00dff58efa40d8",
       "weights": true
-    },
-    {
-      "key": "6c9112950bc7b1a3",
-      "place": 4,
-      "repo": "golden217/attune-l4b",
-      "revision": "527c7e490203fa39e04d18128fd8955d1783d232",
-      "sha256": "74e1185a9a4a7022b99c6952ac0176ca8c5eb7be05400bfc20bb36279faa2659",
-      "weights": true
     }
   ],
-  "kings_commit": "b9cacc60dfd02ae24a6c67720925b36969df400e",
+  "kings_commit": "0b9be9c1c62b1318eb5bdb186be537de576ddb3c",
   "level": 4,
   "spec": {
     "version": 4,
@@ -74,6 +74,6 @@
       "branch": "main"
     }
   },
-  "checked_at": "2026-11-12T11:26:14Z",
-  "changed_at": "2026-11-11T15:39:15Z"
+  "checked_at": "2026-11-12T19:02:15Z",
+  "changed_at": "2026-11-12T19:02:15Z"
 }
