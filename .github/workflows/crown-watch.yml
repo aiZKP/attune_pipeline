@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  issues: write
 
 concurrency:
   group: crown-watch
@@ -31,6 +32,16 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python3 main/.github/scripts/crown_watch.py data
+      - name: Raise an issue for level alerts (the owner is notified)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -f data/alerts_new.json ]; then
+            title="LEVEL WATCH: $(python3 -c "import json;a=json.load(open('data/alerts_new.json'));print(a[0]['text'][:150] + (' (+%d more)' % (len(a)-1) if len(a) > 1 else ''))")"
+            body="$(python3 -c "import json;print('The level watch saw:\n\n' + '\n'.join('- ' + x['text'] for x in json.load(open('data/alerts_new.json'))))")"
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body" || true
+            rm -f data/alerts_new.json
+          fi
       - name: Commit if anything changed
         working-directory: data
         run: |

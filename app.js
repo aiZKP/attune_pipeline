@@ -288,8 +288,23 @@
       item("Level", String(c.level !== undefined ? c.level : (c.spec && c.spec.level) || "—")),
       item("Margin", "+" + ((c.spec && (c.spec.margin !== undefined ? c.spec.margin : c.spec.crown && c.spec.crown.margin)) || 3) + " pts"),
       item("King seen since", ago(since)),
-      item("Checked", ago(c.checked_at)),
+      item("Gate max level", String(gateMax(c))),
+      item("Next (docs)", (c.watch && c.watch.docs && c.watch.docs.next) || "—"),
+      item("Checked", ago(c.checked_at) + (c.checked_by ? " · " + c.checked_by : "")),
     );
+    renderAlerts(c);
+  }
+  function gateMax(c) {
+    const g = c && c.watch && c.watch.gate && c.watch.gate.vector;
+    return g && g.max_level !== null && g.max_level !== undefined ? g.max_level : "—";
+  }
+  // Level-watch alerts of the last 72 hours, newest first: a push that announces or starts a new level.
+  function renderAlerts(c) {
+    const box = $("#levelalert");
+    if (!box) return;
+    const recent = ((c && c.alerts) || []).filter((a) => Date.now() - Date.parse(a.at) < 72 * 3600 * 1000).slice(-6).reverse();
+    box.replaceChildren(...recent.map((a) => h("div", { class: "alertbar" },
+      h("strong", { text: "Level watch: " }), h("span", { text: a.text + " · " + ago(a.at) }))));
   }
 
   // ------------------------------------------------------------------------------------------ lock
@@ -515,9 +530,24 @@
       h("div", { class: "grid2" },
         panel("Verdicts against the king", "Δ in points with 90% CI; the crown needs +3", chartBox("delta", { rows })),
         panel("Per-task success" + (focus ? " — " + focus.id : ""), focus ? (focus.method + " · " + methodTitle(focus.method)) : "", chartBox("dumbbell", { v: focus && focus.v }))),
+      level5Panel(),
       h("div", { class: "grid2" },
         panel("Up next", "from ledger/queue.json", qList),
         panel("Recent activity", "journals of A and B", recentActivity())));
+  }
+  // The level-5 programme: fixed steps, done one by one (ledger/competition/level5.json).
+  function level5Panel() {
+    const p = STATE.level5;
+    if (!p || !(p.steps || []).length) return h("div", null);
+    const kind = { done: "good", running: "info", next: "warning", blocked: "critical", waiting: "" };
+    const rows = p.steps.map((st) => h("tr", null,
+      h("td", { class: "mono", text: st.id }), h("td", { text: st.title }), h("td", { text: st.owner || "" }),
+      h("td", { class: "state" }, h("span", { class: "chip " + (kind[st.state] || "") }, h("span", { class: "ico", text: "●" }), h("span", { text: " " + st.state }))),
+      h("td", { text: st.result || "" })));
+    return panel("Level 5 programme" + (p.goal ? ": " + p.goal : ""), "updated " + ago(p.updated) + " · steps are done in order, one at a time",
+      h("div", { class: "tablewrap" }, h("table", { class: "steps" },
+        h("thead", null, h("tr", null, ["Step", "What", "Who", "State", "Result"].map((t) => h("th", { text: t })))),
+        h("tbody", null, rows))));
   }
   function recentActivity() {
     const items = [];
@@ -680,10 +710,36 @@
         : ch.kind === "spec" ? "Spec fields changed: " + (ch.fields || []).join(", ")
           : ch.kind === "kings" ? "Kings list changed"
             : ch.kind === "head" ? (ch.repo + " moved: " + (ch.message || ""))
-              : ch.kind === "model" ? (ch.repo + " updated") : JSON.stringify(ch);
+              : ch.kind === "model" ? (ch.repo + " updated")
+                : ch.kind === "branch" ? (ch.repo + ": branch " + ch.branch + " " + ch.change)
+                  : ch.kind === "gate" ? ("Level gate (" + ch.branch + "): max level " + ch.from + " → " + ch.to)
+                    : ch.kind === "gate-factors" ? ("Level gate (" + ch.branch + "): factors changed" + (ch.added ? ", new: " + Object.keys(ch.added).join(", ") : ""))
+                      : ch.kind === "level-config" ? ("Benchmark (" + ch.branch + "): new level config " + (ch.added || []).join(", "))
+                        : ch.kind === "spec-branch" ? ("Orchestrator branch " + ch.branch + ": spec level " + ((ch.spec || {}).level))
+                          : ch.kind === "docs" ? ("Docs: Vector is at level " + ch.level + ", next: " + ch.next)
+                            : ch.kind === "repo" ? ("New public repository: " + ch.name) : JSON.stringify(ch);
+    const w = (CROWN && CROWN.watch) || {};
+    const gate = (w.gate && w.gate.vector) || {};
+    const brRows = [];
+    Object.keys(w.branches || {}).forEach((repo) => Object.keys(w.branches[repo] || {}).forEach((b) => {
+      const sp = repo === "vector-orchestrator" ? (w.spec_branches || {})[b] : null;
+      brRows.push(h("tr", null, h("td", { text: repo }), h("td", { text: b }), h("td", { class: "mono", text: String(w.branches[repo][b]).slice(0, 10) }),
+        h("td", { text: sp ? "spec level " + sp.level + " · " + sp.tasks + " tasks · step ratio " + sp.step_ratio + " · margin " + sp.margin : "" })));
+    }));
+    const watchBody = CROWN && CROWN.watch ? h("div", null,
+      h("div", { class: "kv" },
+        h("span", { class: "k", text: "Level gate" }), h("span", { text: "max level " + gateMax(CROWN) + " · configs " + ((gate.level_configs || []).join(", ") || "—") }),
+        h("span", { class: "k", text: "Factors" }), h("span", null, Object.keys(gate.factors || {}).map((f) => h("span", { class: "tag", text: f + " L" + gate.factors[f] }))),
+        h("span", { class: "k", text: "Docs" }), h("span", { text: "Vector is at level " + ((w.docs || {}).level || "—") + " · next: " + ((w.docs || {}).next || "—") }),
+        h("span", { class: "k", text: "Checked" }), h("span", { text: ago(CROWN.checked_at) + " by the " + (CROWN.checked_by || "watch") + " watch" + ((w.errors || []).length ? " · could not read: " + w.errors.join(", ") : "") })),
+      h("div", { class: "tablewrap" }, h("table", null,
+        h("thead", null, h("tr", null, ["Repository", "Branch", "Head", "Spec on that branch"].map((t) => h("th", { text: t })))),
+        h("tbody", null, brRows))))
+      : h("div", { class: "empty", text: "The level watch has not reported yet." });
     return h("div", null,
       h("div", { class: "grid2" }, panel("The four paid kings", "newest first; weights public in robotensor/vector-kings", h("div", { class: "tablewrap" }, kings)),
         panel("Spec", "vector-orchestrator spec.json", spec)),
+      panel("Level watch", "what would announce the next level: branches, the benchmark's level gate, the docs", watchBody),
       panel("Pinned repositories", "a move means re-pin and re-baseline", h("div", { class: "tablewrap" }, heads)),
       panel("Timeline", "crown, level, spec and repo changes", evList.length
         ? h("div", { class: "tablewrap" }, h("table", null, h("tbody", null, evList.map((e) => h("tr", null, h("td", { class: "mono", text: String(e.at || "").replace("T", " ").replace("Z", "Z") }), h("td", { text: describe(e.ch) }))))))

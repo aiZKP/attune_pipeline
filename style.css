@@ -249,6 +249,10 @@ tr.sel td { background: var(--accent-wash); }
 .foot { color: var(--text-muted); font-size: 12px; margin-top: 18px; }
 .warnbar { background: var(--surface-2); border-left: 3px solid var(--warning); padding: 8px 12px; border-radius: 6px;
   margin-bottom: 12px; font-size: 13px; }
+.alertbar { background: var(--surface-2); border-left: 4px solid var(--critical); padding: 9px 12px; border-radius: 6px;
+  margin: 0 0 8px; font-size: 13.5px; color: var(--text-primary); }
+.alertbar strong { font-weight: 650; }
+.steps td.state { white-space: nowrap; }
 
 @media (max-width: 1000px) {
   .kpis { grid-template-columns: 1fr 1fr; }

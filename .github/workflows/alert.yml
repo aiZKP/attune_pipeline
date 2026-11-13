@@ -1,0 +1,29 @@
+name: level-alert
+
+# Opens an issue with a level-watch alert so that GitHub notifies the repository's owner at once.
+# Started by attune-lab/tools/scripts/level_watch.py (the fast local watch). Public facts only.
+on:
+  workflow_dispatch:
+    inputs:
+      title:
+        description: "Alert title"
+        required: true
+      body:
+        description: "Alert text"
+        required: false
+        default: ""
+
+permissions:
+  issues: write
+
+jobs:
+  alert:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Open the issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITLE: ${{ inputs.title }}
+          BODY: ${{ inputs.body }}
+        run: gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" --body "$BODY"
