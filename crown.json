@@ -45,14 +45,14 @@
   "level": 4,
   "spec": {
     "version": 4,
-    "sha": "9b14b234bf3bd5ea4aa4d0a06632647927550314",
     "level": 4,
     "margin": 3.0,
     "max_void": 0.2,
     "runs_per_task": 15,
     "step_ratio": 2,
     "tasks": 16,
-    "architecture": "vector_v1.1"
+    "architecture": "vector_v1.1",
+    "sha": "9b14b234bf3bd5ea4aa4d0a06632647927550314"
   },
   "heads": {
     "vector-orchestrator": {
@@ -74,6 +74,94 @@
       "branch": "main"
     }
   },
-  "checked_at": "2026-11-13T15:23:35Z",
-  "changed_at": "2026-11-13T15:23:35Z"
+  "watch": {
+    "errors": [],
+    "branches": {
+      "vector-orchestrator": {
+        "main": "9b14b234bf3bd5ea4aa4d0a06632647927550314",
+        "spec/level-3": "7f8439771dd48dfc1802918022d77fc4c213fa99"
+      },
+      "RoboTwin-Vector": {
+        "main": "3fa46dded036ca962990da24b8427692b2e378a3",
+        "vector": "e87619a4191409ce57d31e6b73f8cbce0a166ccc"
+      },
+      "attune-subnet": {
+        "main": "f6bb8dee8657552935be0582bb5374e0c0326cfb"
+      }
+    },
+    "gate": {
+      "vector": {
+        "max_level": 4,
+        "factors": {
+          "object_pose": 1,
+          "arm_choice": 1,
+          "light": 2,
+          "background": 2,
+          "table_height": 2,
+          "model_id": 3,
+          "object_size": 3,
+          "object_color": 3,
+          "object_category": 3,
+          "clutter": 4
+        },
+        "levels_sha": "b6ba995d1e71",
+        "level_configs": [
+          "level1.yml",
+          "level2.yml",
+          "level3.yml",
+          "level4.yml"
+        ]
+      },
+      "main": {
+        "max_level": null,
+        "factors": {},
+        "levels_sha": null,
+        "level_configs": []
+      }
+    },
+    "spec_branches": {
+      "main": {
+        "version": 4,
+        "level": 4,
+        "margin": 3.0,
+        "max_void": 0.2,
+        "runs_per_task": 15,
+        "step_ratio": 2,
+        "tasks": 16,
+        "architecture": "vector_v1.1",
+        "sha": "9b14b234bf3bd5ea4aa4d0a06632647927550314"
+      },
+      "spec/level-3": {
+        "version": 3,
+        "level": 3,
+        "margin": 3.0,
+        "max_void": 0.2,
+        "runs_per_task": 15,
+        "step_ratio": 2,
+        "tasks": 16,
+        "architecture": "vector_v1.1",
+        "sha": "7f8439771dd48dfc1802918022d77fc4c213fa99"
+      }
+    },
+    "docs": {
+      "level": 4,
+      "next": "Embodiment",
+      "ladder_sha": "3658370c2943"
+    },
+    "org_repos": [
+      ".github",
+      "ICIL-LiberoGen-bench",
+      "ICIL-evaluation-harness",
+      "RoboTwin-ICIL",
+      "RoboTwin-Vector",
+      "attune-subnet",
+      "vector-orchestrator",
+      "zero-wam"
+    ],
+    "interval_min": 3
+  },
+  "checked_at": "2026-11-13T18:42:32Z",
+  "checked_by": "local",
+  "changed_at": "2026-11-13T15:23:35Z",
+  "alerts": []
 }
