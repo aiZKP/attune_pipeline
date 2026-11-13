@@ -13,6 +13,21 @@
       "from": "smol2room/vector-l4-ft5",
       "to": "fremuo/vector-fl4-ft",
       "key": "ebd6faff98e81d8a"
+    },
+    {
+      "at": "2026-11-13T15:23:35Z",
+      "kind": "crown",
+      "from": "fremuo/vector-fl4-ft",
+      "to": "magicvec/vector-mine3",
+      "key": "1ad44eaa065b318e"
+    },
+    {
+      "at": "2026-11-13T15:23:35Z",
+      "kind": "head",
+      "repo": "attune-subnet",
+      "from": "c63564d7fc",
+      "to": "f6bb8dee86",
+      "message": "feat(vector): one submission per registration, read from the chain"
     }
   ]
 }
