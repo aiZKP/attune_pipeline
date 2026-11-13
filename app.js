@@ -544,7 +544,7 @@
       h("td", { class: "mono", text: st.id }), h("td", { text: st.title }), h("td", { text: st.owner || "" }),
       h("td", { class: "state" }, h("span", { class: "chip " + (kind[st.state] || "") }, h("span", { class: "ico", text: "●" }), h("span", { text: " " + st.state }))),
       h("td", { text: st.result || "" })));
-    return panel("Level 5 programme" + (p.goal ? ": " + p.goal : ""), "updated " + ago(p.updated) + " · steps are done in order, one at a time",
+    return panel("Level 5 programme" + (p.goal ? ": " + p.goal : ""), "updated " + ago(p.updated) + " · steps are done in order, one at a time" + (p.note ? " · " + p.note : ""),
       h("div", { class: "tablewrap" }, h("table", { class: "steps" },
         h("thead", null, h("tr", null, ["Step", "What", "Who", "State", "Result"].map((t) => h("th", { text: t })))),
         h("tbody", null, rows))));
