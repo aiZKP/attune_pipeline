@@ -158,9 +158,61 @@
       "vector-orchestrator",
       "zero-wam"
     ],
+    "pulls": {
+      "vector-orchestrator": {},
+      "RoboTwin-Vector": {},
+      "attune-subnet": {}
+    },
+    "docs_pages": {
+      "home": {
+        "sha": "189bdcc2023a",
+        "chars": 3148,
+        "now": "04 Clutter"
+      },
+      "docs/guide/the-tasks": {
+        "sha": "dbc6d4448eb3",
+        "chars": 9183
+      },
+      "docs/guide/the-ladder": {
+        "sha": "9bde487952ce",
+        "chars": 7492
+      },
+      "docs/guide/the-model": {
+        "sha": "11adf2d3ae88",
+        "chars": 13352
+      },
+      "docs/guide/training": {
+        "sha": "99abe0ae6f9a",
+        "chars": 4843
+      },
+      "docs/rules/what-you-submit": {
+        "sha": "847b11383e0e",
+        "chars": 5578
+      },
+      "docs/rules/honest-measurement": {
+        "sha": "ce4ee28e77ce",
+        "chars": 4874
+      },
+      "docs/reference/key-numbers": {
+        "sha": "4f0bf93b1b36",
+        "chars": 3354
+      },
+      "docs/reference/faq": {
+        "sha": "5f7935e40398",
+        "chars": 3737
+      },
+      "docs/reference/glossary": {
+        "sha": "7983a46d3a5a",
+        "chars": 3869
+      },
+      "docs/reference/the-record": {
+        "sha": "f2ddbc1cd14c",
+        "chars": 4025
+      }
+    },
     "interval_min": 3
   },
-  "checked_at": "2026-11-14T15:06:01Z",
+  "checked_at": "2026-11-14T15:18:02Z",
   "checked_by": "local",
   "changed_at": "2026-11-13T15:23:35Z",
   "alerts": []
