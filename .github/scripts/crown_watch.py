@@ -40,9 +40,17 @@ HEADS = {
 BENCH = "robotensor/RoboTwin-Vector"
 ORCH = "robotensor/vector-orchestrator"
 DOCS_URL = "https://vector.robotensor.ai/docs/guide/the-tasks"
+SITE = "https://vector.robotensor.ai"
+#: The organisers say what changes "is announced in Vector's docs before it applies to any duel". These
+#: pages hold no live numbers, so any change in their text is news. (The docs' front page and the
+#: leaderboard carry the crown's running score and are left out.)
+DOCS_PAGES = ("", "docs/guide/the-tasks", "docs/guide/the-ladder", "docs/guide/the-model", "docs/guide/training",
+              "docs/rules/what-you-submit", "docs/rules/honest-measurement", "docs/reference/key-numbers",
+              "docs/reference/faq", "docs/reference/glossary", "docs/reference/the-record")
 HEARTBEAT_MIN = 55
 #: Event kinds that can mean a new level is coming or has come. They are raised as alerts.
-ALERT_KINDS = ("level", "spec", "gate", "gate-factors", "level-config", "spec-branch", "branch", "docs", "repo")
+ALERT_KINDS = ("level", "spec", "gate", "gate-factors", "level-config", "spec-branch", "branch", "docs", "repo",
+               "docs-page", "pull-request")
 ALERT_HEADS = ("vector-orchestrator", "RoboTwin-Vector")
 KEEP_ALERTS = 30
 
@@ -141,7 +149,30 @@ def _docs() -> dict:
             "ladder_sha": hashlib.sha256(para.encode()).hexdigest()[:12] if para else None}
 
 
-def watch(old: dict | None) -> dict:
+def page_text(url: str) -> str:
+    page = fetch(url).decode("utf-8", "replace")
+    t = re.sub(r"<script[\s\S]*?</script>|<style[\s\S]*?</style>", " ", page)
+    return re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", t))).strip()
+
+
+def _docs_pages() -> dict:
+    out = {}
+    for path in DOCS_PAGES:
+        t = page_text(f"{SITE}/{path}")
+        now_at = re.search(r"(\d\d [A-Z][A-Za-z -]+?) Now\b", t) if path == "" else None
+        out[path or "home"] = {"sha": hashlib.sha256(t.encode()).hexdigest()[:12], "chars": len(t),
+                               **({"now": now_at.group(1)} if now_at else {})}
+    return out
+
+
+def _pulls() -> dict:
+    out = {}
+    for name, (repo, _) in HEADS.items():
+        out[name] = {str(p["number"]): p["title"][:120] for p in get(f"{API}/repos/{repo}/pulls?state=open&per_page=50", github=True)}
+    return out
+
+
+def watch(old: dict | None, pages: bool = True) -> dict:
     """What announces a level change. A part that cannot be read keeps its last value: a network error must
     not look like a change."""
     old = old or {}
@@ -164,6 +195,11 @@ def watch(old: dict | None) -> dict:
     part("spec_branches", spec_branches)
     part("docs", _docs)
     part("org_repos", lambda: sorted(r["name"] for r in get(f"{API}/orgs/{ORG}/repos?per_page=100", github=True)))
+    part("pulls", _pulls)
+    if pages:
+        part("docs_pages", _docs_pages)
+    else:
+        out["docs_pages"] = old.get("docs_pages")   # read on the slower beat; the last reading stands
     return out
 
 
@@ -217,6 +253,16 @@ def watch_events(old: dict | None, new: dict, at: str) -> list[dict]:
         fields = [k for k in ("level", "next", "ladder_sha") if od.get(k) != nd.get(k)]
         if fields:
             evs.append({"at": at, "kind": "docs", "fields": fields, "level": nd.get("level"), "next": nd.get("next")})
+    op, np_ = old.get("docs_pages") or {}, new.get("docs_pages") or {}
+    for page in sorted(np_):
+        if page in op and op[page] and np_[page] and op[page].get("sha") != np_[page].get("sha"):
+            evs.append({"at": at, "kind": "docs-page", "page": page, "now": np_[page].get("now"),
+                        "chars": [op[page].get("chars"), np_[page].get("chars")]})
+    opl, npl = old.get("pulls"), new.get("pulls")
+    if opl is not None and npl is not None:
+        for repo in sorted(npl):
+            for num in sorted(set(npl[repo]) - set(opl.get(repo) or {})):
+                evs.append({"at": at, "kind": "pull-request", "repo": repo, "number": num, "title": npl[repo][num]})
     orp, nrp = old.get("org_repos"), new.get("org_repos")
     if orp and nrp:
         for name in sorted(set(nrp) - set(orp)):
@@ -280,15 +326,21 @@ def describe(ev: dict) -> str:
         return f"Docs changed ({', '.join(ev.get('fields') or [])}): Vector is at level {ev.get('level')}, next: {ev.get('next')}"
     if k == "repo":
         return f"New public repository: {ORG}/{ev.get('name')}"
+    if k == "docs-page":
+        c = ev.get("chars") or [None, None]
+        return (f"The organisers' page '{ev.get('page')}' changed its text ({c[0]} -> {c[1]} characters)"
+                + (f"; its roadmap marks '{ev.get('now')}' as now" if ev.get("now") else ""))
+    if k == "pull-request":
+        return f"{ev.get('repo')}: new pull request #{ev.get('number')}: {ev.get('title')}"
     return json.dumps(ev)
 
 
-def step(old: dict, hist: dict, heartbeat_min: int = HEARTBEAT_MIN, source: str = "action") -> dict:
+def step(old: dict, hist: dict, heartbeat_min: int = HEARTBEAT_MIN, source: str = "action", pages: bool = True) -> dict:
     """One watch step on the last crown.json (`old`) and crown-history.json (`hist`).
     Returns {"crown", "history", "events", "alerts", "write"}; `write` says whether to store them."""
     at = now()
     new = snapshot()
-    new["watch"] = watch(old.get("watch"))
+    new["watch"] = watch(old.get("watch"), pages=pages)
     evs = events(old, new, at) + watch_events(old.get("watch"), new["watch"], at)
     alerts = [dict(e, text=describe(e)) for e in evs if is_alert(e)]
     keys = ("king", "kings", "kings_commit", "level", "spec", "heads")
