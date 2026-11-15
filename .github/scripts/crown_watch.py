@@ -50,7 +50,7 @@ DOCS_PAGES = ("", "docs/guide/the-tasks", "docs/guide/the-ladder", "docs/guide/t
 HEARTBEAT_MIN = 55
 #: Event kinds that can mean a new level is coming or has come. They are raised as alerts.
 ALERT_KINDS = ("level", "spec", "gate", "gate-factors", "level-config", "spec-branch", "branch", "docs", "repo",
-               "docs-page", "pull-request", "blog-post")
+               "docs-page", "pull-request", "blog-post", "hf-repo")
 ALERT_HEADS = ("vector-orchestrator", "RoboTwin-Vector")
 KEEP_ALERTS = 30
 
@@ -181,6 +181,19 @@ def _blog() -> list:
     return out
 
 
+#: The organisers' Hugging Face account: a new repository there (base weights for a new model contract, a
+#: dataset for another robot) or a change to the base weights is news for a level change.
+HF_ORG = "robotensor"
+
+
+def _hf_org() -> dict:
+    out = {}
+    for kind in ("models", "datasets"):
+        for r in get(f"https://huggingface.co/api/{kind}?author={HF_ORG}&limit=100&sort=lastModified&direction=-1"):
+            out[f"{kind}/{r['id']}"] = (r.get("lastModified") or "")[:19]
+    return out
+
+
 def _pulls() -> dict:
     out = {}
     for name, (repo, _) in HEADS.items():
@@ -215,9 +228,11 @@ def watch(old: dict | None, pages: bool = True) -> dict:
     if pages:
         part("docs_pages", _docs_pages)
         part("blog", _blog)
+        part("hf_org", _hf_org)
     else:
         out["docs_pages"] = old.get("docs_pages")   # read on the slower beat; the last reading stands
         out["blog"] = old.get("blog")
+        out["hf_org"] = old.get("hf_org")
     return out
 
 
@@ -281,6 +296,13 @@ def watch_events(old: dict | None, new: dict, at: str) -> list[dict]:
         for title in nb:
             if title not in ob:
                 evs.append({"at": at, "kind": "blog-post", "title": title})
+    oh, nh = old.get("hf_org"), new.get("hf_org")
+    if oh and nh:
+        for rid in sorted(set(nh) - set(oh)):
+            evs.append({"at": at, "kind": "hf-repo", "id": rid, "change": "new"})
+        base = "models/robotensor/vector_base"
+        if base in oh and base in nh and oh[base] != nh[base]:
+            evs.append({"at": at, "kind": "hf-repo", "id": base, "change": "changed"})
     opl, npl = old.get("pulls"), new.get("pulls")
     if opl is not None and npl is not None:
         for repo in sorted(npl):
@@ -353,6 +375,9 @@ def describe(ev: dict) -> str:
         c = ev.get("chars") or [None, None]
         return (f"The organisers' page '{ev.get('page')}' changed its text ({c[0]} -> {c[1]} characters)"
                 + (f"; its roadmap marks '{ev.get('now')}' as now" if ev.get("now") else ""))
+    if k == "hf-repo":
+        return (f"The organisers' Hugging Face account: {ev.get('id')} is {ev.get('change')}"
+                + (" (the base weights every model starts from)" if str(ev.get("id")).endswith("vector_base") else ""))
     if k == "blog-post":
         return f"New post on the organisers' blog: {ev.get('title')}"
     if k == "pull-request":
