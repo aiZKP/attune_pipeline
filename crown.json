@@ -210,10 +210,24 @@
         "chars": 4025
       }
     },
-    "blog": null,
+    "blog": [
+      "Which Robot Policies will Win?",
+      "Bittensor released Gamma. Attune is the first subnet to put the feature to work.",
+      "Where Robots Will Win",
+      "Attune Vector Level 2: Results, and What's Next for Level 3",
+      "Day 40 and Locked In: Where Attune Stands on Conviction",
+      "Attune Vector Level 1: Results",
+      "The Infrastructure Layer for Physical AI",
+      "The Physical AI Frontier: Closing the Gap Between Simulation and Reality",
+      "Behavior Prompting Policy: demonstrations as prompts for robot control",
+      "Zero-WAM Makes Robot ICL Real \u2014 But Its Biggest Opportunity Is Still Ahead",
+      "Robotics in 2026: From Imitation to Self-Improving Physical Intelligence",
+      "The Missing Variable in Robot Benchmarking: The Task Itself",
+      "What in-context robot learning asks of a model"
+    ],
     "interval_min": 3
   },
-  "checked_at": "2026-11-15T01:54:01Z",
+  "checked_at": "2026-11-15T02:06:02Z",
   "checked_by": "local",
   "changed_at": "2026-11-13T15:23:35Z",
   "alerts": []
