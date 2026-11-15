@@ -225,9 +225,9 @@
       "The Missing Variable in Robot Benchmarking: The Task Itself",
       "What in-context robot learning asks of a model"
     ],
-    "interval_min": 3
+    "interval_min": 1
   },
-  "checked_at": "2026-11-15T08:54:02Z",
+  "checked_at": "2026-11-15T09:04:01Z",
   "checked_by": "local",
   "changed_at": "2026-11-13T15:23:35Z",
   "alerts": []
