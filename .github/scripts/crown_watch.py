@@ -50,7 +50,7 @@ DOCS_PAGES = ("", "docs/guide/the-tasks", "docs/guide/the-ladder", "docs/guide/t
 HEARTBEAT_MIN = 55
 #: Event kinds that can mean a new level is coming or has come. They are raised as alerts.
 ALERT_KINDS = ("level", "spec", "gate", "gate-factors", "level-config", "spec-branch", "branch", "docs", "repo",
-               "docs-page", "pull-request")
+               "docs-page", "pull-request", "blog-post")
 ALERT_HEADS = ("vector-orchestrator", "RoboTwin-Vector")
 KEEP_ALERTS = 30
 
@@ -165,6 +165,22 @@ def _docs_pages() -> dict:
     return out
 
 
+#: The organisers' blog. Their level posts ("Level 2: results, and what's next for level 3") say what the
+#: next level changes, so a new post is news.
+BLOG_FEED = "https://www.robotensor.ai/feed.xml"
+
+
+def _blog() -> list:
+    feed = fetch(BLOG_FEED).decode("utf-8", "replace")
+    items = re.findall(r"<item>([\s\S]*?)</item>", feed) or re.findall(r"<entry>([\s\S]*?)</entry>", feed)
+    out = []
+    for it in items:
+        m = re.search(r"<title>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?</title>", it)
+        if m:
+            out.append(html.unescape(m.group(1)).strip()[:160])
+    return out
+
+
 def _pulls() -> dict:
     out = {}
     for name, (repo, _) in HEADS.items():
@@ -198,8 +214,10 @@ def watch(old: dict | None, pages: bool = True) -> dict:
     part("pulls", _pulls)
     if pages:
         part("docs_pages", _docs_pages)
+        part("blog", _blog)
     else:
         out["docs_pages"] = old.get("docs_pages")   # read on the slower beat; the last reading stands
+        out["blog"] = old.get("blog")
     return out
 
 
@@ -258,6 +276,11 @@ def watch_events(old: dict | None, new: dict, at: str) -> list[dict]:
         if page in op and op[page] and np_[page] and op[page].get("sha") != np_[page].get("sha"):
             evs.append({"at": at, "kind": "docs-page", "page": page, "now": np_[page].get("now"),
                         "chars": [op[page].get("chars"), np_[page].get("chars")]})
+    ob, nb = old.get("blog"), new.get("blog")
+    if ob is not None and nb is not None:
+        for title in nb:
+            if title not in ob:
+                evs.append({"at": at, "kind": "blog-post", "title": title})
     opl, npl = old.get("pulls"), new.get("pulls")
     if opl is not None and npl is not None:
         for repo in sorted(npl):
@@ -330,6 +353,8 @@ def describe(ev: dict) -> str:
         c = ev.get("chars") or [None, None]
         return (f"The organisers' page '{ev.get('page')}' changed its text ({c[0]} -> {c[1]} characters)"
                 + (f"; its roadmap marks '{ev.get('now')}' as now" if ev.get("now") else ""))
+    if k == "blog-post":
+        return f"New post on the organisers' blog: {ev.get('title')}"
     if k == "pull-request":
         return f"{ev.get('repo')}: new pull request #{ev.get('number')}: {ev.get('title')}"
     return json.dumps(ev)
