@@ -648,6 +648,7 @@
         panel("Verdicts against the king", "Δ in points with 90% CI; the crown needs +3", chartBox("delta", { rows })),
         panel("Per-task success" + (focus ? " — " + focus.id : ""), focus ? (focus.method + " · " + methodTitle(focus.method)) : "", chartBox("dumbbell", { v: focus && focus.v }))),
       level5Panel(),
+      v2Panel(),
       h("div", { class: "grid2" },
         panel("Up next", "from ledger/queue.json", qList),
         panel("Recent activity", "journals of A and B", recentActivity())));
@@ -665,6 +666,40 @@
       h("div", { class: "tablewrap" }, h("table", { class: "steps" },
         h("thead", null, h("tr", null, ["Step", "What", "Who", "State", "Result"].map((t) => h("th", { text: t })))),
         h("tbody", null, rows))));
+  }
+  // The v2 programme: per candidate line, methods tried one at a time against the score rule
+  // (ledger/competition/v2.json). A state is always an icon plus a word, never colour alone.
+  function v2Panel() {
+    const p = STATE.v2;
+    if (!p || !(p.lines || []).length) return h("div", null);
+    const kind = { done: "good", correct: "good", pass: "good", running: "info", next: "warning", "false": "critical",
+      banned: "critical", invalid: "critical", below: "critical", waiting: "", closed: "" };
+    const stateChip = (s) => h("span", { class: "chip " + (kind[s] || "") },
+      h("span", { class: "ico", "aria-hidden": "true", text: "●" }), h("span", { text: " " + (s || "waiting") }));
+    const score = (x) => (isNum(x) ? x.toFixed(3) : "—");
+    const mark = (label, c, min) => h("span", { class: "v2mark" },
+      h("span", { class: "meta", text: label + " " + ((c && c.name) || "—") + " " }),
+      h("strong", { text: score(c && c.score) }),
+      h("span", { class: "meta", text: " (needs above " + min + ") " }), stateChip((c && c.state) || "waiting"));
+    const body = [];
+    p.lines.forEach((ln) => {
+      const details = [ln.v1 && ln.v1.detail, ln.v2 && ln.v2.detail].filter(Boolean).join(" · ");
+      body.push(h("tr", { class: "linehead" }, h("td", { colspan: "5" },
+        h("div", { class: "t", text: ln.title }),
+        h("div", null, mark("v1", ln.v1, p.v1_min), mark("v2", ln.v2, p.v2_min)),
+        details ? h("div", { class: "meta", text: details }) : null)));
+      (ln.steps || []).forEach((st) => body.push(h("tr", null,
+        h("td", { class: "mono", text: st.id }), h("td", { text: st.title }),
+        h("td", { class: "state" }, stateChip(st.state)),
+        h("td", { class: "num", text: score(st.score) }), h("td", { text: st.result || "" }))));
+    });
+    return panel("v2 programme: every candidate above " + p.v2_min,
+      "updated " + ago(p.updated) + " · one method at a time per line" + (p.note ? " · " + p.note : ""),
+      h("div", null,
+        p.rule ? h("p", { class: "meta", text: p.rule }) : null,
+        h("div", { class: "tablewrap" }, h("table", { class: "steps" },
+          h("thead", null, h("tr", null, ["Step", "What", "State", "Score", "Result"].map((t) => h("th", { text: t })))),
+          h("tbody", null, body)))));
   }
   function recentActivity() {
     const items = [];
