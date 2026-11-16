@@ -388,12 +388,9 @@
       const c = sec < 240 ? "good" : sec < 600 ? "warning" : "critical";
       return h("span", { class: "live-watch" }, h("span", { class: "dot " + c, "aria-hidden": "true" }), h("span", { text: label + ": " + since(sec) }));
     };
-    const disc = w.discord && w.discord.configured;
     const watches = h("div", { class: "live-row" },
       watch("Live watch", w.live && w.live.at), watch("Chain watch", w.chain && w.chain.at),
-      watch("Level watch", w.level && w.level.at), watch("Auto-submitter", w.autosubmit && w.autosubmit.at),
-      h("span", { class: "live-watch" }, h("span", { class: "dot " + (disc ? "good" : "neutral"), "aria-hidden": "true" }),
-        h("span", { text: "Discord bot: " + (disc ? "on" : "not set up") })));
+      watch("Level watch", w.level && w.level.at), watch("Auto-submitter", w.autosubmit && w.autosubmit.at));
     const sp = SIG.spec || {}, si = SIG.site || {}, ch = SIG.chain || {};
     const kv = (k, v) => h("span", null, h("span", { class: "k", text: k }), h("span", { class: "v", text: v }));
     const burst = (ch.bursts || []).slice(-1)[0];
