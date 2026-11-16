@@ -363,12 +363,19 @@
     if (!SIG) { box.replaceChildren(h("div", { class: "live-row meta", text: "Live signals: " + (SIG_ERR || "loading…") })); return; }
     const a = SIG.auto || {}, w = SIG.watches || {};
     const landed = (a.sends || []).filter((x) => x.ok && x.landed);
+    const counted = landed.filter((x) => x.target === null || x.target === undefined || x.landed >= x.target).map((x) => x.landed);
     const open = (a.targets || []).filter((t) => !t.fired);
     let cls = "good", head, detail;
-    if (landed.length) {
+    if (counted.length) {
       head = "SUBMITTED";
-      detail = (a.repo || "the entry") + " landed in block " + fmtInt(landed[landed.length - 1].landed)
+      detail = (a.repo || "the entry") + " landed in block " + fmtInt(Math.min(...counted))
+        + (counted.length > 1 ? "; sent again " + (counted.length - 1) + "× as free insurance after a later start signal (last in block "
+          + fmtInt(Math.max(...counted)) + "; the validator counts the first one at or after the start block)" : "")
         + (a.revealed ? "; the repository is out of private (gated)" : "; the repository is still private");
+    } else if (landed.length) {
+      cls = "warning"; head = "LANDED EARLY";
+      detail = (a.repo || "the entry") + " landed in block " + fmtInt(landed[landed.length - 1].landed)
+        + ", before its start block: not read and not spent; it is being sent again";
     } else if (a.stop) { cls = "critical"; head = "STOPPED"; detail = "the STOP file is set: nothing will be sent"; }
     else if ((a.problems || []).length) { cls = "critical"; head = "NOT READY"; detail = a.problems.join("; "); }
     else if (open.length) {
