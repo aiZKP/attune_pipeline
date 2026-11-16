@@ -385,9 +385,13 @@
         + " (" + localTime(t.eta) + "); from " + (t.source || "?");
     } else {
       head = "READY";
-      detail = "waits for the next release; it sends " + (a.repo || "?") + " from hotkey " + (a.hotkey || "?")
-        + " (UID " + (a.uid !== null && a.uid !== undefined ? a.uid : "?") + ") to land in the start block once one is known"
-        + (a.mode_b ? ", or a few blocks after the start if none is" : "");
+      const plan = a.force_repo
+        ? (a.force_repo === "hold" ? "held by hand (nothing will be sent)" : "chosen by hand: " + a.force_repo)
+        : "another robot → " + (a.repo || "?") + "; new tasks → " + (a.repo_tasks || "hold (no task entry yet)")
+          + "; rules only → hold";
+      detail = "waits for the next release; one submission from hotkey " + (a.hotkey || "?")
+        + " (UID " + (a.uid !== null && a.uid !== undefined ? a.uid : "?") + "), chosen by the release: " + plan
+        + ". It lands in the start block once one is known" + (a.mode_b ? ", or a few blocks after the start if none is" : "");
     }
     const status = h("div", { class: "live-status " + cls }, h("strong", { text: "Auto-submitter: " + head + ". " }), h("span", { text: detail }));
     const watch = (label, at) => {
