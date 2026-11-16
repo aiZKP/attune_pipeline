@@ -111,6 +111,28 @@ header.top {
 .crown .v { font-weight: 600; }
 .crown .v.mono { font-weight: 500; }
 
+/* live signals of the watches and the auto-submitter */
+.live {
+  display: grid; gap: 8px; background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 10px 14px; margin-bottom: 14px; box-shadow: var(--shadow); min-width: 0;
+}
+.live-status { font-size: 14.5px; padding: 8px 10px; border-radius: 6px; background: var(--surface-2);
+  border-left: 4px solid var(--good); overflow-wrap: anywhere; }
+.live-status.warning { border-left-color: var(--warning); }
+.live-status.critical { border-left-color: var(--critical); }
+.live-status strong { font-weight: 680; }
+.live-row { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: baseline; font-size: 13px; min-width: 0; }
+.live-row .k { color: var(--text-muted); font-size: 12px; margin-right: 6px; }
+.live-row .v { font-weight: 600; }
+.live-watch { display: inline-flex; align-items: center; gap: 6px; }
+.dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; background: var(--text-muted); flex: none; }
+.dot.good { background: var(--good); }
+.dot.warning { background: var(--warning); }
+.dot.critical { background: var(--critical); }
+.dot.neutral { background: var(--border); }
+.live-alerts summary { cursor: pointer; font-size: 13px; color: var(--text-secondary); }
+.live-alert { font-size: 13px; padding: 5px 0; border-top: 1px solid var(--border); overflow-wrap: anywhere; }
+
 /* lock screen */
 .lock {
   max-width: 440px; margin: 40px auto; background: var(--surface-1); border: 1px solid var(--border);

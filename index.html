@@ -6,7 +6,7 @@
   <meta name="robots" content="noindex, nofollow">
   <meta name="referrer" content="no-referrer">
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src https://raw.githubusercontent.com 'self'; form-action 'none'; base-uri 'none'">
+        content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src https://raw.githubusercontent.com https://api.github.com 'self'; form-action 'none'; base-uri 'none'">
   <title>Attune Pipeline</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232a78d6'/%3E%3Cpath d='M7 22l6-12 6 9 6-7' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="style.css">
@@ -22,6 +22,7 @@
       <button class="btn small" id="lock-btn" type="button" hidden>Lock</button>
     </header>
     <section class="crown" id="crown" aria-label="Public competition status"><span class="meta">Loading crown status…</span></section>
+    <section class="live" id="live" aria-label="Live signals" aria-live="polite"></section>
     <div id="levelalert" role="status" aria-live="polite"></div>
     <main id="app"></main>
     <div class="foot" id="foot"></div>

@@ -9,6 +9,10 @@
     labRepo: "attune-lab",
     dataBase: params.get("src") === "local" ? "./data/" : "https://raw.githubusercontent.com/aiZKP/attune_pipeline/data/",
     refreshMs: 60000,
+    // live signals of the watches and the auto-submitter: read through the GitHub API, which is not cached for
+    // minutes like the raw-file host; conditional requests that come back unchanged do not count against its limit
+    signalsApi: "https://api.github.com/repos/aiZKP/attune_pipeline/contents/signals.enc.json?ref=data",
+    signalsMs: 20000,
     keyStore: "attune.key.v1",
   };
 
@@ -98,6 +102,7 @@
 
   // ------------------------------------------------------------------------------------------ state
   let BLOB = null, STATE = null, RAW = null, CROWN = null, HIST = null;
+  let SIG = null, SIG_CT = null, SIG_SRC = "", SIG_ERR = "", sigBusy = false;
   const UI = { tab: "overview", exp: null, method: null, tables: {} };
   const keyName = () => CONF.keyStore + ":" + (BLOB ? BLOB.salt : "");
 
@@ -222,7 +227,7 @@
   // ------------------------------------------------------------------------------------------ boot
   async function boot() {
     $("#theme-btn").addEventListener("click", toggleTheme);
-    $("#lock-btn").addEventListener("click", () => { store.del(keyName()); RAW = null; STATE = null; renderLock(); });
+    $("#lock-btn").addEventListener("click", () => { store.del(keyName()); RAW = null; STATE = null; SIG = null; SIG_CT = null; renderLock(); renderLive(); });
     window.addEventListener("resize", debounce(drawCharts, 150));
     try { matchMedia("(prefers-color-scheme: dark)").addEventListener("change", drawCharts); } catch (e) { /* old browsers */ }
     await refreshPublic();
@@ -238,7 +243,10 @@
     }
     if (STATE) render(); else renderLock();
     setInterval(tick, CONF.refreshMs);
-    document.addEventListener("visibilitychange", () => { if (!document.hidden) tick(); });
+    setInterval(refreshSignals, CONF.signalsMs);
+    setInterval(renderLive, 5000);
+    refreshSignals();
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) { tick(); refreshSignals(); } });
   }
   function debounce(fn, ms) { let t; return () => { clearTimeout(t); t = setTimeout(fn, ms); }; }
   function toggleTheme() {
@@ -307,6 +315,106 @@
       h("strong", { text: "Level watch: " }), h("span", { text: a.text + " · " + ago(a.at) }))));
   }
 
+  // ------------------------------------------------------------------------------------------ live signals
+  async function getSignalsBlob() {
+    if (params.get("src") === "local") return [await getJSON("signals.enc.json"), "local"];
+    try {
+      const r = await fetch(CONF.signalsApi, { cache: "no-cache", headers: { Accept: "application/vnd.github.raw+json" } });
+      if (r.ok) return [await r.json(), "live"];
+    } catch (e) { /* the delayed copy below */ }
+    return [await getJSON("signals.enc.json"), "delayed"];
+  }
+  async function refreshSignals() {
+    if (sigBusy || document.hidden) return;
+    if (!RAW || !BLOB) { renderLive(); return; }
+    sigBusy = true;
+    try {
+      const [b, src] = await getSignalsBlob();
+      SIG_SRC = src; SIG_ERR = "";
+      if (b.ct !== SIG_CT) {
+        if (b.salt !== BLOB.salt) SIG_ERR = "the live signals use another key";
+        else { SIG = await decryptBlob(b, RAW); SIG_CT = b.ct; }
+      }
+    } catch (e) { SIG_ERR = e.message; }
+    finally { sigBusy = false; renderLive(); }
+  }
+  const fmtInt = (n) => (isNum(n) ? n.toLocaleString("en-US") : "—");
+  function since(sec) {
+    if (!isFinite(sec)) return "never";
+    if (sec < 90) return Math.max(0, Math.round(sec)) + " s ago";
+    if (sec < 5400) return Math.round(sec / 60) + " min ago";
+    return Math.round(sec / 3600) + " h ago";
+  }
+  function untilText(iso) {
+    const ms = Date.parse(iso) - Date.now();
+    if (!isFinite(ms)) return "time unknown";
+    if (ms <= 0) return "now";
+    const m = Math.round(ms / 60000);
+    return m < 60 ? "in " + m + " min" : "in " + Math.floor(m / 60) + " h " + (m % 60) + " min";
+  }
+  function localTime(iso) {
+    const t = Date.parse(iso);
+    return isFinite(t) ? new Date(t).toLocaleString(undefined, { weekday: "short", hour: "2-digit", minute: "2-digit" }) : "—";
+  }
+  function renderLive() {
+    const box = $("#live");
+    if (!box) return;
+    if (!RAW) { box.replaceChildren(h("div", { class: "live-row meta", text: "Live signals: unlock with the passphrase to see them." })); return; }
+    if (!SIG) { box.replaceChildren(h("div", { class: "live-row meta", text: "Live signals: " + (SIG_ERR || "loading…") })); return; }
+    const a = SIG.auto || {}, w = SIG.watches || {};
+    const landed = (a.sends || []).filter((x) => x.ok && x.landed);
+    const open = (a.targets || []).filter((t) => !t.fired);
+    let cls = "good", head, detail;
+    if (landed.length) {
+      head = "SUBMITTED";
+      detail = (a.repo || "the entry") + " landed in block " + fmtInt(landed[landed.length - 1].landed)
+        + (a.revealed ? "; the repository is out of private (gated)" : "; the repository is still private");
+    } else if (a.stop) { cls = "critical"; head = "STOPPED"; detail = "the STOP file is set: nothing will be sent"; }
+    else if ((a.problems || []).length) { cls = "critical"; head = "NOT READY"; detail = a.problems.join("; "); }
+    else if (open.length) {
+      cls = "warning"; head = "ARMED";
+      const t = open[0];
+      detail = (a.repo || "the entry") + " will land in block " + fmtInt(t.block) + ", " + untilText(t.eta)
+        + " (" + localTime(t.eta) + "); from " + (t.source || "?");
+    } else {
+      head = "READY";
+      detail = "waits for the next release; it sends " + (a.repo || "?") + " from hotkey " + (a.hotkey || "?")
+        + " (UID " + (a.uid !== null && a.uid !== undefined ? a.uid : "?") + ") to land in the start block once one is known"
+        + (a.mode_b ? ", or a few blocks after the start if none is" : "");
+    }
+    const status = h("div", { class: "live-status " + cls }, h("strong", { text: "Auto-submitter: " + head + ". " }), h("span", { text: detail }));
+    const watch = (label, at) => {
+      const sec = at ? (Date.now() - Date.parse(at)) / 1000 : Infinity;
+      const c = sec < 240 ? "good" : sec < 600 ? "warning" : "critical";
+      return h("span", { class: "live-watch" }, h("span", { class: "dot " + c, "aria-hidden": "true" }), h("span", { text: label + ": " + since(sec) }));
+    };
+    const disc = w.discord && w.discord.configured;
+    const watches = h("div", { class: "live-row" },
+      watch("Live watch", w.live && w.live.at), watch("Chain watch", w.chain && w.chain.at),
+      watch("Level watch", w.level && w.level.at), watch("Auto-submitter", w.autosubmit && w.autosubmit.at),
+      h("span", { class: "live-watch" }, h("span", { class: "dot " + (disc ? "good" : "neutral"), "aria-hidden": "true" }),
+        h("span", { text: "Discord bot: " + (disc ? "on" : "not set up") })));
+    const sp = SIG.spec || {}, si = SIG.site || {}, ch = SIG.chain || {};
+    const kv = (k, v) => h("span", null, h("span", { class: "k", text: k }), h("span", { class: "v", text: v }));
+    const burst = (ch.bursts || []).slice(-1)[0];
+    const facts = h("div", { class: "live-row" },
+      kv("Spec on GitHub", "level " + (sp.level ?? "?") + " · version " + (sp.version ?? "?") + " · " + (sp.n_tasks ?? "?") + " tasks · " + (sp.architecture || "?")),
+      kv("Validator site", "level " + (si.level ?? "?") + " · queue " + (si.queue ?? "?")),
+      kv("Chain head", "≈ " + fmtInt(ch.head)),
+      kv("Code pushed", SIG.pushed ? ago(SIG.pushed.at) + (SIG.pushed.block ? " (block " + fmtInt(SIG.pushed.block) + ")" : "") : "not yet"),
+      burst ? kv("Last burst of entries", "block " + fmtInt(burst.first_block) + (burst.round ? " (a round block)" : "")) : null);
+    const list = (SIG.alerts || []).slice(-10).reverse();
+    const fresh = list.length && Date.now() - Date.parse(list[0].at) < 6 * 3600 * 1000;
+    const alerts = h("details", { class: "live-alerts", open: (UI.liveOpen !== undefined ? UI.liveOpen : fresh) || null,
+      ontoggle: (ev) => { UI.liveOpen = ev.target.open; } },
+      h("summary", { text: "Alerts: " + (SIG.alerts || []).length + (list.length ? ", newest " + ago(list[0].at) : "") }),
+      list.map((x) => h("div", { class: "live-alert" }, h("span", { class: "meta", text: localTime(x.at) + " · " }), h("span", { text: x.text }))));
+    const foot = h("div", { class: "live-row meta", text: "Signals published " + ago(SIG.generated)
+      + (SIG_SRC === "delayed" ? " · read from the delayed copy (up to 5 min old)" : " · read every " + Math.round(CONF.signalsMs / 1000) + " s")
+      + (SIG_ERR ? " · last read failed: " + SIG_ERR : "") });
+    box.replaceChildren(status, watches, facts, alerts, foot);
+  }
+
   // ------------------------------------------------------------------------------------------ lock
   function renderLock(msg) {
     $("#lock-btn").hidden = true;
@@ -366,6 +474,7 @@
   }
   function render() {
     $("#lock-btn").hidden = false;
+    if (!SIG && !sigBusy) refreshSignals();
     updatedLabel();
     renderCrown();
     const app = $("#app");
