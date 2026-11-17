@@ -148,6 +148,16 @@
       "next": "Embodiment",
       "ladder_sha": "3658370c2943"
     },
+    "org_pushed": {
+      "ICIL-evaluation-harness": "2026-09-04T19:02:57Z",
+      "ICIL-LiberoGen-bench": "2026-09-13T13:05:53Z",
+      "RoboTwin-ICIL": "2026-09-17T13:14:44Z",
+      ".github": "2026-10-07T12:57:03Z",
+      "zero-wam": "2026-09-22T00:20:22Z",
+      "attune-subnet": "2026-11-13T11:50:07Z",
+      "vector-orchestrator": "2026-11-09T13:12:31Z",
+      "RoboTwin-Vector": "2026-10-07T17:29:41Z"
+    },
     "org_repos": [
       ".github",
       "ICIL-LiberoGen-bench",
@@ -226,9 +236,11 @@
       "What in-context robot learning asks of a model"
     ],
     "hf_org": null,
+    "docs_links": null,
+    "whitepaper": null,
     "interval_min": 1
   },
-  "checked_at": "2026-11-17T15:34:02Z",
+  "checked_at": "2026-11-17T15:44:02Z",
   "checked_by": "local",
   "changed_at": "2026-11-13T15:23:35Z",
   "alerts": []
