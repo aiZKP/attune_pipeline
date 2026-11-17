@@ -6,8 +6,10 @@ pipeline pins, and everything that announces the NEXT level before it goes live:
   - every branch of the three repositories (level 3's spec sat on `spec/level-3` before its switch);
   - the benchmark's level gate, envs/_levels.py (MAX_LEVEL and the factors), and its level config files;
   - the spec.json of every vector-orchestrator branch;
-  - the public docs' "Vector is at level N" and the ladder's "Next" step;
-  - the organisation's list of public repositories.
+  - the public docs' "Vector is at level N" and the ladder's "Next" step, every docs page's text, and pages that
+    appear in the docs' navigation;
+  - the organisation's public repositories and their last push (a push to Zero-WAM or RoboTwin-ICIL is news too);
+  - the organisers' blog, Hugging Face account and white paper.
 Writes crown.json and crown-history.json into the data checkout. Stdlib only.
 
 Usage: crown_watch.py <data-dir>         (the GitHub Action; a slow backup, GitHub runs it every few hours)
@@ -50,7 +52,9 @@ DOCS_PAGES = ("", "docs/guide/the-tasks", "docs/guide/the-ladder", "docs/guide/t
 HEARTBEAT_MIN = 55
 #: Event kinds that can mean a new level is coming or has come. They are raised as alerts.
 ALERT_KINDS = ("level", "spec", "gate", "gate-factors", "level-config", "spec-branch", "branch", "docs", "repo",
-               "docs-page", "pull-request", "blog-post", "hf-repo")
+               "docs-page", "pull-request", "blog-post", "hf-repo", "repo-push", "docs-new-page", "whitepaper")
+#: The white paper: its next version would say what the next release is.
+WHITEPAPER = "https://vector.robotensor.ai/whitepaper.pdf"
 ALERT_HEADS = ("vector-orchestrator", "RoboTwin-Vector")
 KEEP_ALERTS = 30
 
@@ -194,6 +198,27 @@ def _hf_org() -> dict:
     return out
 
 
+def _docs_links() -> list:
+    """Every docs page the docs' own navigation links to: a page that appears is news (a "Vector v2" guide, new
+    submission instructions), and the fast watch keeps its text for the auto-submitter to read a start block from."""
+    page = fetch(f"{SITE}/docs").decode("utf-8", "replace")
+    paths = {m.group(1).strip("/") for m in re.finditer(r'href="(/docs/[A-Za-z0-9/_\-.]+)"', page)}
+    return sorted(p for p in paths if p)
+
+
+def _whitepaper() -> dict:
+    """The white paper's identity without downloading it: its ETag, size and date from a HEAD request."""
+    req = urllib.request.Request(WHITEPAPER, method="HEAD", headers={"User-Agent": "attune-crown-watch"})
+    with urllib.request.urlopen(req, timeout=30) as r:
+        h = r.headers
+        return {"etag": h.get("ETag"), "length": h.get("Content-Length"), "modified": h.get("Last-Modified")}
+
+
+def _org_pushed() -> dict:
+    """{repository: last push} for every public repository of the organisation, from one listing."""
+    return {r["name"]: r.get("pushed_at") for r in get(f"{API}/orgs/{ORG}/repos?per_page=100", github=True)}
+
+
 def _pulls() -> dict:
     out = {}
     for name, (repo, _) in HEADS.items():
@@ -223,16 +248,18 @@ def watch(old: dict | None, pages: bool = True) -> dict:
 
     part("spec_branches", spec_branches)
     part("docs", _docs)
-    part("org_repos", lambda: sorted(r["name"] for r in get(f"{API}/orgs/{ORG}/repos?per_page=100", github=True)))
+    part("org_pushed", _org_pushed)
+    out["org_repos"] = sorted(out["org_pushed"]) if out.get("org_pushed") else old.get("org_repos")
     part("pulls", _pulls)
     if pages:
         part("docs_pages", _docs_pages)
         part("blog", _blog)
         part("hf_org", _hf_org)
+        part("docs_links", _docs_links)
+        part("whitepaper", _whitepaper)
     else:
-        out["docs_pages"] = old.get("docs_pages")   # read on the slower beat; the last reading stands
-        out["blog"] = old.get("blog")
-        out["hf_org"] = old.get("hf_org")
+        for key in ("docs_pages", "blog", "hf_org", "docs_links", "whitepaper"):
+            out[key] = old.get(key)                  # read on the slower beat; the last reading stands
     return out
 
 
@@ -300,9 +327,24 @@ def watch_events(old: dict | None, new: dict, at: str) -> list[dict]:
     if oh and nh:
         for rid in sorted(set(nh) - set(oh)):
             evs.append({"at": at, "kind": "hf-repo", "id": rid, "change": "new"})
-        base = "models/robotensor/vector_base"
-        if base in oh and base in nh and oh[base] != nh[base]:
-            evs.append({"at": at, "kind": "hf-repo", "id": base, "change": "changed"})
+        for rid in sorted(set(oh) & set(nh)):
+            # every change but the kings' repository (a new crown writes there; that is the "crown" event)
+            if oh[rid] != nh[rid] and not rid.endswith(KINGS_REPO):
+                evs.append({"at": at, "kind": "hf-repo", "id": rid, "change": "changed"})
+    ol, nl = old.get("docs_links"), new.get("docs_links")
+    if ol and nl:
+        for path in sorted(set(nl) - set(ol)):
+            evs.append({"at": at, "kind": "docs-new-page", "path": path})
+    ow, nw = old.get("whitepaper"), new.get("whitepaper")
+    if ow and nw and ow != nw:
+        evs.append({"at": at, "kind": "whitepaper", "from": ow, "to": nw})
+    opu, npu = old.get("org_pushed"), new.get("org_pushed")
+    if opu and npu:
+        watched = {repo.split("/")[1] for repo, _ in HEADS.values()}
+        for name in sorted(set(opu) & set(npu)):
+            # the three pinned repositories' pushes are "head" and "branch" events already
+            if opu[name] != npu[name] and name not in watched:
+                evs.append({"at": at, "kind": "repo-push", "name": name, "from": opu[name], "to": npu[name]})
     opl, npl = old.get("pulls"), new.get("pulls")
     if opl is not None and npl is not None:
         for repo in sorted(npl):
@@ -380,6 +422,13 @@ def describe(ev: dict) -> str:
                 + (" (the base weights every model starts from)" if str(ev.get("id")).endswith("vector_base") else ""))
     if k == "blog-post":
         return f"New post on the organisers' blog: {ev.get('title')}"
+    if k == "repo-push":
+        return (f"New commits on {ORG}/{ev.get('name')} (pushed {ev.get('to')}): outside the three pinned repositories, "
+                f"where a new model or benchmark (World Action Model, ICIL) would be built")
+    if k == "docs-new-page":
+        return f"A new page in the organisers' docs: {SITE}/{ev.get('path')}"
+    if k == "whitepaper":
+        return f"The white paper changed ({WHITEPAPER}): {json.dumps(ev.get('from'))} -> {json.dumps(ev.get('to'))}"
     if k == "pull-request":
         return f"{ev.get('repo')}: new pull request #{ev.get('number')}: {ev.get('title')}"
     return json.dumps(ev)
