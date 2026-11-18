@@ -75,7 +75,9 @@
     }
   },
   "watch": {
-    "errors": [],
+    "errors": [
+      "docs: HTTPError"
+    ],
     "branches": {
       "vector-orchestrator": {
         "main": "9b14b234bf3bd5ea4aa4d0a06632647927550314",
@@ -240,7 +242,7 @@
     "whitepaper": null,
     "interval_min": 1
   },
-  "checked_at": "2026-11-18T10:14:02Z",
+  "checked_at": "2026-11-18T10:24:02Z",
   "checked_by": "local",
   "changed_at": "2026-11-13T15:23:35Z",
   "alerts": []
