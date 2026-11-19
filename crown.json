@@ -235,14 +235,38 @@
       "The Missing Variable in Robot Benchmarking: The Task Itself",
       "What in-context robot learning asks of a model"
     ],
-    "hf_org": null,
-    "docs_links": null,
-    "whitepaper": null,
-    "v2_probe": null,
+    "hf_org": {
+      "models/robotensor/vector-kings": "2026-11-13T11:10:53",
+      "models/robotensor/vector_base": "2026-10-12T11:40:57",
+      "datasets/robotensor/robotwin-aloha-clean": "2026-09-16T23:13:07"
+    },
+    "docs_links": [
+      "docs/guide/the-ladder",
+      "docs/guide/the-model",
+      "docs/guide/the-tasks",
+      "docs/guide/training",
+      "docs/reference/faq",
+      "docs/reference/glossary",
+      "docs/reference/key-numbers",
+      "docs/reference/the-record",
+      "docs/rules/honest-measurement",
+      "docs/rules/what-you-submit"
+    ],
+    "whitepaper": {
+      "etag": "\"2908ab681ff2833a6ed43316b0ffcb41\"",
+      "length": "1103145",
+      "modified": "Tue, 17 Nov 2026 23:35:09 GMT"
+    },
+    "v2_probe": {
+      "docs/roadmap": 404,
+      "docs/mining": 404,
+      "docs/mining/submit": 404,
+      "api/public/docs": 404
+    },
     "interval_min": 1
   },
-  "checked_at": "2026-11-19T16:13:02Z",
+  "checked_at": "2026-11-19T16:14:02Z",
   "checked_by": "local",
-  "changed_at": "2026-11-19T16:13:02Z",
+  "changed_at": "2026-11-19T16:14:02Z",
   "alerts": []
 }
