@@ -384,7 +384,8 @@ def watch_events(old: dict | None, new: dict, at: str) -> list[dict]:
         for path in sorted(set(nl) - set(ol)):
             evs.append({"at": at, "kind": "docs-new-page", "path": path})
     ow, nw = old.get("whitepaper"), new.get("whitepaper")
-    if ow and nw and ow != nw:
+    # the date moves with every redeploy of their site; the content is the ETag and the size
+    if ow and nw and (ow.get("etag"), ow.get("length")) != (nw.get("etag"), nw.get("length")):
         evs.append({"at": at, "kind": "whitepaper", "from": ow, "to": nw})
     opu, npu = old.get("org_pushed"), new.get("org_pushed")
     if opu and npu:
