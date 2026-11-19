@@ -52,9 +52,13 @@ DOCS_PAGES = ("", "docs/guide/the-tasks", "docs/guide/the-ladder", "docs/guide/t
 HEARTBEAT_MIN = 55
 #: Event kinds that can mean a new level is coming or has come. They are raised as alerts.
 ALERT_KINDS = ("level", "spec", "gate", "gate-factors", "level-config", "spec-branch", "branch", "docs", "repo",
-               "docs-page", "pull-request", "blog-post", "hf-repo", "repo-push", "docs-new-page", "whitepaper")
+               "docs-page", "pull-request", "blog-post", "hf-repo", "repo-push", "docs-new-page", "whitepaper",
+               "v2-signal")
 #: The white paper: its next version would say what the next release is.
 WHITEPAPER = "https://vector.robotensor.ai/whitepaper.pdf"
+#: Pages of the Vector V2 site that was briefly public on 18 Nov 2026 (about 11:20-15:00 CET) and answer 404
+#: since: one that answers again means V2 is (about to go) live. The live limits are at /api/public/docs.
+V2_PROBES = ("docs/roadmap", "docs/mining", "docs/mining/submit", "api/public/docs")
 ALERT_HEADS = ("vector-orchestrator", "RoboTwin-Vector")
 KEEP_ALERTS = 30
 
@@ -142,7 +146,12 @@ def _gate(branch: str) -> dict:
 
 
 def _docs() -> dict:
-    page = fetch(DOCS_URL).decode("utf-8", "replace")
+    try:
+        page = fetch(DOCS_URL).decode("utf-8", "replace")
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:      # the v1 tasks page is gone: a new site (V2) has replaced it; that is a change
+            return {"level": None, "next": None, "ladder_sha": None, "gone": True}
+        raise                    # 403 (their bot check), 5xx: not a change; the last reading stands
     t = re.sub(r"<script[\s\S]*?</script>|<style[\s\S]*?</style>", " ", page)
     t = re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", t)))
     level = re.search(r"Vector is at level (\d+)", t)
@@ -159,13 +168,45 @@ def page_text(url: str) -> str:
     return re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", t))).strip()
 
 
-def _docs_pages() -> dict:
-    out = {}
+def _docs_pages(old: dict | None = None) -> dict:
+    """Each page's text digest. A page that cannot be read now (their bot check answers 403 at times) keeps its last
+    reading, so one blocked page no longer blinds the others; a page that is gone (404) reads as gone, which is news."""
+    old, out = old or {}, {}
     for path in DOCS_PAGES:
-        t = page_text(f"{SITE}/{path}")
+        key = path or "home"
+        try:
+            t = page_text(f"{SITE}/{path}")
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                out[key] = {"sha": None, "chars": 0, "gone": True}
+            elif old.get(key):
+                out[key] = old[key]
+            continue
+        except Exception:  # noqa: BLE001 - network: the last reading stands
+            if old.get(key):
+                out[key] = old[key]
+            continue
         now_at = re.search(r"(\d\d [A-Z][A-Za-z -]+?) Now\b", t) if path == "" else None
-        out[path or "home"] = {"sha": hashlib.sha256(t.encode()).hexdigest()[:12], "chars": len(t),
-                               **({"now": now_at.group(1)} if now_at else {})}
+        out[key] = {"sha": hashlib.sha256(t.encode()).hexdigest()[:12], "chars": len(t),
+                    **({"now": now_at.group(1)} if now_at else {})}
+    if not out:
+        raise RuntimeError("no docs page could be read")
+    return out
+
+
+def _v2_probe(old: dict | None = None) -> dict:
+    """{path: HTTP status} for the V2 pages that answered 404 after 18 Nov. A 403 (their bot check) or a network error
+    keeps the last reading: it is not an answer."""
+    old, out = old or {}, {}
+    for path in V2_PROBES:
+        try:
+            req = urllib.request.Request(f"{SITE}/{path}", method="HEAD", headers={"User-Agent": "attune-crown-watch"})
+            with urllib.request.urlopen(req, timeout=20) as r:
+                out[path] = r.status
+        except urllib.error.HTTPError as exc:
+            out[path] = exc.code if exc.code != 403 else old.get(path)
+        except Exception:  # noqa: BLE001
+            out[path] = old.get(path)
     return out
 
 
@@ -252,13 +293,14 @@ def watch(old: dict | None, pages: bool = True) -> dict:
     out["org_repos"] = sorted(out["org_pushed"]) if out.get("org_pushed") else old.get("org_repos")
     part("pulls", _pulls)
     if pages:
-        part("docs_pages", _docs_pages)
+        part("docs_pages", lambda: _docs_pages(old.get("docs_pages")))
         part("blog", _blog)
         part("hf_org", _hf_org)
         part("docs_links", _docs_links)
         part("whitepaper", _whitepaper)
+        part("v2_probe", lambda: _v2_probe(old.get("v2_probe")))
     else:
-        for key in ("docs_pages", "blog", "hf_org", "docs_links", "whitepaper"):
+        for key in ("docs_pages", "blog", "hf_org", "docs_links", "whitepaper", "v2_probe"):
             out[key] = old.get(key)                  # read on the slower beat; the last reading stands
     return out
 
@@ -310,9 +352,15 @@ def watch_events(old: dict | None, new: dict, at: str) -> list[dict]:
                 evs.append({"at": at, "kind": "spec-branch", "branch": b, "new": b not in os_, "spec": n})
     od, nd = old.get("docs") or {}, new.get("docs") or {}
     if od and nd:
-        fields = [k for k in ("level", "next", "ladder_sha") if od.get(k) != nd.get(k)]
+        fields = [k for k in ("level", "next", "ladder_sha", "gone") if od.get(k) != nd.get(k)]
         if fields:
-            evs.append({"at": at, "kind": "docs", "fields": fields, "level": nd.get("level"), "next": nd.get("next")})
+            evs.append({"at": at, "kind": "docs", "fields": fields, "level": nd.get("level"), "next": nd.get("next"),
+                        "gone": bool(nd.get("gone"))})
+    ov, nv = old.get("v2_probe"), new.get("v2_probe")
+    if ov and nv:
+        for path in sorted(nv):
+            if nv.get(path) == 200 and ov.get(path) != 200:
+                evs.append({"at": at, "kind": "v2-signal", "path": path, "from": ov.get(path), "to": 200})
     op, np_ = old.get("docs_pages") or {}, new.get("docs_pages") or {}
     for page in sorted(np_):
         if page in op and op[page] and np_[page] and op[page].get("sha") != np_[page].get("sha"):
@@ -410,7 +458,13 @@ def describe(ev: dict) -> str:
         return (f"vector-orchestrator branch {ev.get('branch')}{' (new)' if ev.get('new') else ''}: spec level {s.get('level')}, "
                 f"{s.get('tasks')} tasks, step ratio {s.get('step_ratio')}, margin {s.get('margin')}, {s.get('architecture')}")
     if k == "docs":
+        if ev.get("gone"):
+            return (f"The v1 docs page ({DOCS_URL}) is GONE (404): the site has changed; on 18 Nov the V2 site "
+                    f"replaced it for four hours. Read the site now.")
         return f"Docs changed ({', '.join(ev.get('fields') or [])}): Vector is at level {ev.get('level')}, next: {ev.get('next')}"
+    if k == "v2-signal":
+        return (f"VECTOR V2 SIGNAL: {SITE}/{ev.get('path')} answers 200 again (was {ev.get('from')}). On 18 Nov it was "
+                f"part of the briefly public V2 site (copies: attune-lab ledger/notes/v2-site-2026-11-18). V2 may be live.")
     if k == "repo":
         return f"New public repository: {ORG}/{ev.get('name')}"
     if k == "docs-page":
@@ -443,7 +497,11 @@ def step(old: dict, hist: dict, heartbeat_min: int = HEARTBEAT_MIN, source: str 
     evs = events(old, new, at) + watch_events(old.get("watch"), new["watch"], at)
     alerts = [dict(e, text=describe(e)) for e in evs if is_alert(e)]
     keys = ("king", "kings", "kings_commit", "level", "spec", "heads")
-    changed = {k: old.get(k) for k in keys} != {k: new.get(k) for k in keys} or bool(evs)
+    # a watch part that changed is stored at once: a part read only on the slower beat (pages, white paper, V2 probes)
+    # must keep its reading, or the next comparison has nothing to compare with and no change is ever told
+    ow = {k: v for k, v in (old.get("watch") or {}).items() if k != "errors"}
+    nw = {k: v for k, v in (new.get("watch") or {}).items() if k != "errors"}
+    changed = {k: old.get(k) for k in keys} != {k: new.get(k) for k in keys} or bool(evs) or ow != nw
     stale = True
     if old.get("checked_at"):
         age = dt.datetime.now(dt.timezone.utc) - dt.datetime.fromisoformat(old["checked_at"].replace("Z", "+00:00"))
