@@ -499,8 +499,8 @@ def step(old: dict, hist: dict, heartbeat_min: int = HEARTBEAT_MIN, source: str 
     keys = ("king", "kings", "kings_commit", "level", "spec", "heads")
     # a watch part that changed is stored at once: a part read only on the slower beat (pages, white paper, V2 probes)
     # must keep its reading, or the next comparison has nothing to compare with and no change is ever told
-    ow = {k: v for k, v in (old.get("watch") or {}).items() if k != "errors"}
-    nw = {k: v for k, v in (new.get("watch") or {}).items() if k != "errors"}
+    ow = {k: v for k, v in (old.get("watch") or {}).items() if k != "errors" and v is not None}
+    nw = {k: v for k, v in (new.get("watch") or {}).items() if k != "errors" and v is not None}
     changed = {k: old.get(k) for k in keys} != {k: new.get(k) for k in keys} or bool(evs) or ow != nw
     stale = True
     if old.get("checked_at"):
