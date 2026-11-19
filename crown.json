@@ -238,10 +238,11 @@
     "hf_org": null,
     "docs_links": null,
     "whitepaper": null,
+    "v2_probe": null,
     "interval_min": 1
   },
-  "checked_at": "2026-11-19T16:04:02Z",
+  "checked_at": "2026-11-19T16:12:01Z",
   "checked_by": "local",
-  "changed_at": "2026-11-13T15:23:35Z",
+  "changed_at": "2026-11-19T16:12:01Z",
   "alerts": []
 }
