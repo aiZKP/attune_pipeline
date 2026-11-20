@@ -28,6 +28,14 @@
       "from": "c63564d7fc",
       "to": "f6bb8dee86",
       "message": "feat(vector): one submission per registration, read from the chain"
+    },
+    {
+      "at": "2026-11-20T14:10:02Z",
+      "kind": "head",
+      "repo": "attune-subnet",
+      "from": "f6bb8dee86",
+      "to": "40a45756da",
+      "message": "feat(horizon): Horizon miners share Horizon's 70%"
     }
   ]
 }
