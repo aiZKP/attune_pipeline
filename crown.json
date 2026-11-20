@@ -68,9 +68,9 @@
       "branch": "vector"
     },
     "attune-subnet": {
-      "sha": "f6bb8dee8657552935be0582bb5374e0c0326cfb",
-      "date": "2026-11-13T11:49:35Z",
-      "message": "feat(vector): one submission per registration, read from the chain",
+      "sha": "40a45756da27b850d4a0d14e41a8d5b5561d3a5f",
+      "date": "2026-11-20T13:17:06Z",
+      "message": "feat(horizon): Horizon miners share Horizon's 70%",
       "branch": "main"
     }
   },
@@ -86,7 +86,7 @@
         "vector": "e87619a4191409ce57d31e6b73f8cbce0a166ccc"
       },
       "attune-subnet": {
-        "main": "f6bb8dee8657552935be0582bb5374e0c0326cfb"
+        "main": "40a45756da27b850d4a0d14e41a8d5b5561d3a5f"
       }
     },
     "gate": {
@@ -154,7 +154,7 @@
       "RoboTwin-ICIL": "2026-09-17T13:14:44Z",
       ".github": "2026-10-07T12:57:03Z",
       "zero-wam": "2026-09-22T00:20:22Z",
-      "attune-subnet": "2026-11-13T11:50:07Z",
+      "attune-subnet": "2026-11-20T14:09:39Z",
       "vector-orchestrator": "2026-11-09T13:12:31Z",
       "RoboTwin-Vector": "2026-10-07T17:29:41Z"
     },
@@ -265,8 +265,8 @@
     },
     "interval_min": 1
   },
-  "checked_at": "2026-11-20T14:09:02Z",
+  "checked_at": "2026-11-20T14:10:02Z",
   "checked_by": "local",
-  "changed_at": "2026-11-20T14:09:02Z",
+  "changed_at": "2026-11-20T14:10:02Z",
   "alerts": []
 }
