@@ -175,8 +175,8 @@
     },
     "docs_pages": {
       "home": {
-        "sha": "189bdcc2023a",
-        "chars": 3148,
+        "sha": "0aaa0d46f1b0",
+        "chars": 3235,
         "now": "04 Clutter"
       },
       "docs/guide/the-tasks": {
@@ -265,8 +265,20 @@
     },
     "interval_min": 1
   },
-  "checked_at": "2026-11-23T08:41:02Z",
+  "checked_at": "2026-11-23T08:42:02Z",
   "checked_by": "local",
-  "changed_at": "2026-11-23T08:41:02Z",
-  "alerts": []
+  "changed_at": "2026-11-23T08:42:02Z",
+  "alerts": [
+    {
+      "at": "2026-11-23T08:42:02Z",
+      "kind": "docs-page",
+      "page": "home",
+      "now": "04 Clutter",
+      "chars": [
+        3148,
+        3235
+      ],
+      "text": "The organisers' page 'home' changed its text (3148 -> 3235 characters); its roadmap marks '04 Clutter' as now"
+    }
+  ]
 }
