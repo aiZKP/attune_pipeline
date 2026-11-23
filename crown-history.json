@@ -36,6 +36,16 @@
       "from": "f6bb8dee86",
       "to": "40a45756da",
       "message": "feat(horizon): Horizon miners share Horizon's 70%"
+    },
+    {
+      "at": "2026-11-23T08:42:02Z",
+      "kind": "docs-page",
+      "page": "home",
+      "now": "04 Clutter",
+      "chars": [
+        3148,
+        3235
+      ]
     }
   ]
 }
