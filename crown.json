@@ -75,9 +75,7 @@
     }
   },
   "watch": {
-    "errors": [
-      "whitepaper: HTTPError"
-    ],
+    "errors": [],
     "branches": {
       "vector-orchestrator": {
         "main": "9b14b234bf3bd5ea4aa4d0a06632647927550314",
@@ -159,7 +157,11 @@
       "zero-wam": "2026-09-22T00:20:22Z",
       "attune-subnet": "2026-11-20T14:09:39Z",
       "vector-orchestrator": "2026-11-09T13:12:31Z",
-      "RoboTwin-Vector": "2026-10-07T17:29:41Z"
+      "RoboTwin-Vector": "2026-10-07T17:29:41Z",
+      "vector-miner": "2026-11-24T15:52:37Z",
+      "vector-env": "2026-11-24T15:52:42Z",
+      "vector-sim": "2026-11-24T15:52:48Z",
+      "vector-validator": "2026-11-24T15:52:54Z"
     },
     "org_repos": [
       ".github",
@@ -168,7 +170,11 @@
       "RoboTwin-ICIL",
       "RoboTwin-Vector",
       "attune-subnet",
+      "vector-env",
+      "vector-miner",
       "vector-orchestrator",
+      "vector-sim",
+      "vector-validator",
       "zero-wam"
     ],
     "pulls": {
@@ -286,54 +292,10 @@
     },
     "interval_min": 1
   },
-  "checked_at": "2026-11-24T15:52:02Z",
+  "checked_at": "2026-11-24T15:53:02Z",
   "checked_by": "local",
-  "changed_at": "2026-11-24T15:52:02Z",
+  "changed_at": "2026-11-24T15:53:02Z",
   "alerts": [
-    {
-      "at": "2026-11-24T13:22:02Z",
-      "kind": "docs-page",
-      "page": "docs/guide/the-model",
-      "now": null,
-      "chars": [
-        13352,
-        0
-      ],
-      "text": "The organisers' page 'docs/guide/the-model' changed its text (13352 -> 0 characters)"
-    },
-    {
-      "at": "2026-11-24T13:22:02Z",
-      "kind": "docs-page",
-      "page": "docs/guide/the-tasks",
-      "now": null,
-      "chars": [
-        9183,
-        0
-      ],
-      "text": "The organisers' page 'docs/guide/the-tasks' changed its text (9183 -> 0 characters)"
-    },
-    {
-      "at": "2026-11-24T13:22:02Z",
-      "kind": "docs-page",
-      "page": "docs/guide/training",
-      "now": null,
-      "chars": [
-        4843,
-        0
-      ],
-      "text": "The organisers' page 'docs/guide/training' changed its text (4843 -> 0 characters)"
-    },
-    {
-      "at": "2026-11-24T13:22:02Z",
-      "kind": "docs-page",
-      "page": "docs/reference/faq",
-      "now": null,
-      "chars": [
-        3737,
-        0
-      ],
-      "text": "The organisers' page 'docs/reference/faq' changed its text (3737 -> 0 characters)"
-    },
     {
       "at": "2026-11-24T13:22:02Z",
       "kind": "docs-page",
@@ -524,6 +486,30 @@
         6165
       ],
       "text": "The organisers' page 'docs/reference/glossary' changed its text (5920 -> 6165 characters)"
+    },
+    {
+      "at": "2026-11-24T15:53:02Z",
+      "kind": "repo",
+      "name": "vector-env",
+      "text": "New public repository: robotensor/vector-env"
+    },
+    {
+      "at": "2026-11-24T15:53:02Z",
+      "kind": "repo",
+      "name": "vector-miner",
+      "text": "New public repository: robotensor/vector-miner"
+    },
+    {
+      "at": "2026-11-24T15:53:02Z",
+      "kind": "repo",
+      "name": "vector-sim",
+      "text": "New public repository: robotensor/vector-sim"
+    },
+    {
+      "at": "2026-11-24T15:53:02Z",
+      "kind": "repo",
+      "name": "vector-validator",
+      "text": "New public repository: robotensor/vector-validator"
     }
   ]
 }
