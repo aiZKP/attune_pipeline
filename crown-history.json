@@ -264,6 +264,16 @@
       "at": "2026-11-24T13:22:02Z",
       "kind": "docs-new-page",
       "path": "docs/validators"
+    },
+    {
+      "at": "2026-11-24T14:57:02Z",
+      "kind": "docs-page",
+      "page": "docs/reference/glossary",
+      "now": null,
+      "chars": [
+        5920,
+        6165
+      ]
     }
   ]
 }
