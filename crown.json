@@ -144,9 +144,10 @@
       }
     },
     "docs": {
-      "level": 4,
-      "next": "Embodiment",
-      "ladder_sha": "3658370c2943"
+      "level": null,
+      "next": null,
+      "ladder_sha": null,
+      "gone": true
     },
     "org_pushed": {
       "ICIL-evaluation-harness": "2026-09-04T19:02:57Z",
@@ -265,9 +266,9 @@
     },
     "interval_min": 1
   },
-  "checked_at": "2026-11-24T13:20:01Z",
+  "checked_at": "2026-11-24T13:21:01Z",
   "checked_by": "local",
-  "changed_at": "2026-11-24T13:20:01Z",
+  "changed_at": "2026-11-24T13:21:01Z",
   "alerts": [
     {
       "at": "2026-11-23T08:42:02Z",
@@ -279,6 +280,20 @@
         3235
       ],
       "text": "The organisers' page 'home' changed its text (3148 -> 3235 characters); its roadmap marks '04 Clutter' as now"
+    },
+    {
+      "at": "2026-11-24T13:21:01Z",
+      "kind": "docs",
+      "fields": [
+        "level",
+        "next",
+        "ladder_sha",
+        "gone"
+      ],
+      "level": null,
+      "next": null,
+      "gone": true,
+      "text": "The v1 docs page (https://vector.robotensor.ai/docs/guide/the-tasks) is GONE (404): the site has changed; on 18 Nov the V2 site replaced it for four hours. Read the site now."
     }
   ]
 }
