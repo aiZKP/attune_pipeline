@@ -294,6 +294,12 @@
       "at": "2026-11-24T15:53:02Z",
       "kind": "repo",
       "name": "vector-validator"
+    },
+    {
+      "at": "2026-11-24T18:32:02Z",
+      "kind": "hf-repo",
+      "id": "datasets/robotensor/vector-bundle",
+      "change": "new"
     }
   ]
 }
