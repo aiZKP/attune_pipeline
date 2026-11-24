@@ -59,6 +59,211 @@
       "level": null,
       "next": null,
       "gone": true
+    },
+    {
+      "at": "2026-11-24T13:22:02Z",
+      "kind": "docs-page",
+      "page": "docs/guide/the-ladder",
+      "now": null,
+      "chars": [
+        7492,
+        0
+      ]
+    },
+    {
+      "at": "2026-11-24T13:22:02Z",
+      "kind": "docs-page",
+      "page": "docs/guide/the-model",
+      "now": null,
+      "chars": [
+        13352,
+        0
+      ]
+    },
+    {
+      "at": "2026-11-24T13:22:02Z",
+      "kind": "docs-page",
+      "page": "docs/guide/the-tasks",
+      "now": null,
+      "chars": [
+        9183,
+        0
+      ]
+    },
+    {
+      "at": "2026-11-24T13:22:02Z",
+      "kind": "docs-page",
+      "page": "docs/guide/training",
+      "now": null,
+      "chars": [
+        4843,
+        0
+      ]
+    },
+    {
+      "at": "2026-11-24T13:22:02Z",
+      "kind": "docs-page",
+      "page": "docs/reference/faq",
+      "now": null,
+      "chars": [
+        3737,
+        0
+      ]
+    },
+    {
+      "at": "2026-11-24T13:22:02Z",
+      "kind": "docs-page",
+      "page": "docs/reference/glossary",
+      "now": null,
+      "chars": [
+        3869,
+        5920
+      ]
+    },
+    {
+      "at": "2026-11-24T13:22:02Z",
+      "kind": "docs-page",
+      "page": "docs/reference/key-numbers",
+      "now": null,
+      "chars": [
+        3354,
+        0
+      ]
+    },
+    {
+      "at": "2026-11-24T13:22:02Z",
+      "kind": "docs-page",
+      "page": "docs/reference/the-record",
+      "now": null,
+      "chars": [
+        4025,
+        0
+      ]
+    },
+    {
+      "at": "2026-11-24T13:22:02Z",
+      "kind": "docs-page",
+      "page": "docs/rules/honest-measurement",
+      "now": null,
+      "chars": [
+        4874,
+        0
+      ]
+    },
+    {
+      "at": "2026-11-24T13:22:02Z",
+      "kind": "docs-page",
+      "page": "docs/rules/what-you-submit",
+      "now": null,
+      "chars": [
+        5578,
+        0
+      ]
+    },
+    {
+      "at": "2026-11-24T13:22:02Z",
+      "kind": "docs-page",
+      "page": "home",
+      "now": null,
+      "chars": [
+        3235,
+        2056
+      ]
+    },
+    {
+      "at": "2026-11-24T13:22:02Z",
+      "kind": "docs-new-page",
+      "path": "docs/contributors"
+    },
+    {
+      "at": "2026-11-24T13:22:02Z",
+      "kind": "docs-new-page",
+      "path": "docs/contributors/account"
+    },
+    {
+      "at": "2026-11-24T13:22:02Z",
+      "kind": "docs-new-page",
+      "path": "docs/contributors/console"
+    },
+    {
+      "at": "2026-11-24T13:22:02Z",
+      "kind": "docs-new-page",
+      "path": "docs/contributors/points"
+    },
+    {
+      "at": "2026-11-24T13:22:02Z",
+      "kind": "docs-new-page",
+      "path": "docs/contributors/wallet"
+    },
+    {
+      "at": "2026-11-24T13:22:02Z",
+      "kind": "docs-new-page",
+      "path": "docs/expert-scripts"
+    },
+    {
+      "at": "2026-11-24T13:22:02Z",
+      "kind": "docs-new-page",
+      "path": "docs/expert-scripts/build"
+    },
+    {
+      "at": "2026-11-24T13:22:02Z",
+      "kind": "docs-new-page",
+      "path": "docs/expert-scripts/commit"
+    },
+    {
+      "at": "2026-11-24T13:22:02Z",
+      "kind": "docs-new-page",
+      "path": "docs/expert-scripts/evaluation"
+    },
+    {
+      "at": "2026-11-24T13:22:02Z",
+      "kind": "docs-new-page",
+      "path": "docs/expert-scripts/protocol"
+    },
+    {
+      "at": "2026-11-24T13:22:02Z",
+      "kind": "docs-new-page",
+      "path": "docs/expert-scripts/rules"
+    },
+    {
+      "at": "2026-11-24T13:22:02Z",
+      "kind": "docs-new-page",
+      "path": "docs/expert-scripts/scenes"
+    },
+    {
+      "at": "2026-11-24T13:22:02Z",
+      "kind": "docs-new-page",
+      "path": "docs/expert-scripts/serve"
+    },
+    {
+      "at": "2026-11-24T13:22:02Z",
+      "kind": "docs-new-page",
+      "path": "docs/faq"
+    },
+    {
+      "at": "2026-11-24T13:22:02Z",
+      "kind": "docs-new-page",
+      "path": "docs/reference/api"
+    },
+    {
+      "at": "2026-11-24T13:22:02Z",
+      "kind": "docs-new-page",
+      "path": "docs/reference/cli"
+    },
+    {
+      "at": "2026-11-24T13:22:02Z",
+      "kind": "docs-new-page",
+      "path": "docs/reference/limits"
+    },
+    {
+      "at": "2026-11-24T13:22:02Z",
+      "kind": "docs-new-page",
+      "path": "docs/rewards"
+    },
+    {
+      "at": "2026-11-24T13:22:02Z",
+      "kind": "docs-new-page",
+      "path": "docs/validators"
     }
   ]
 }
