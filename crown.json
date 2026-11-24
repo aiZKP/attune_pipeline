@@ -255,19 +255,18 @@
     "whitepaper": {
       "etag": "\"2908ab681ff2833a6ed43316b0ffcb41\"",
       "length": "1103145",
-      "modified": "Tue, 17 Nov 2026 23:35:09 GMT"
+      "modified": "Thu, 19 Nov 2026 17:58:22 GMT"
     },
     "v2_probe": {
       "docs/roadmap": 404,
       "docs/mining": 404,
       "docs/mining/submit": 404,
       "api/public/docs": 404
-    },
-    "interval_min": 1
+    }
   },
-  "checked_at": "2026-11-24T04:47:02Z",
-  "checked_by": "local",
-  "changed_at": "2026-11-24T04:47:02Z",
+  "checked_at": "2026-11-24T04:47:37Z",
+  "checked_by": "action",
+  "changed_at": "2026-11-24T04:47:37Z",
   "alerts": [
     {
       "at": "2026-11-23T08:42:02Z",
