@@ -274,6 +274,26 @@
         5920,
         6165
       ]
+    },
+    {
+      "at": "2026-11-24T15:53:02Z",
+      "kind": "repo",
+      "name": "vector-env"
+    },
+    {
+      "at": "2026-11-24T15:53:02Z",
+      "kind": "repo",
+      "name": "vector-miner"
+    },
+    {
+      "at": "2026-11-24T15:53:02Z",
+      "kind": "repo",
+      "name": "vector-sim"
+    },
+    {
+      "at": "2026-11-24T15:53:02Z",
+      "kind": "repo",
+      "name": "vector-validator"
     }
   ]
 }
