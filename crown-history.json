@@ -46,6 +46,19 @@
         3148,
         3235
       ]
+    },
+    {
+      "at": "2026-11-24T13:21:01Z",
+      "kind": "docs",
+      "fields": [
+        "level",
+        "next",
+        "ladder_sha",
+        "gone"
+      ],
+      "level": null,
+      "next": null,
+      "gone": true
     }
   ]
 }
