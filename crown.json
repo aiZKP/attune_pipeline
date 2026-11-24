@@ -75,7 +75,9 @@
     }
   },
   "watch": {
-    "errors": [],
+    "errors": [
+      "whitepaper: HTTPError"
+    ],
     "branches": {
       "vector-orchestrator": {
         "main": "9b14b234bf3bd5ea4aa4d0a06632647927550314",
@@ -220,8 +222,8 @@
         "gone": true
       },
       "docs/reference/glossary": {
-        "sha": "e535efcfad92",
-        "chars": 5920
+        "sha": "736cf2cc90fe",
+        "chars": 6165
       },
       "docs/reference/the-record": {
         "sha": null,
@@ -277,28 +279,17 @@
       "modified": "Tue, 17 Nov 2026 23:35:09 GMT"
     },
     "v2_probe": {
-      "docs/roadmap": 503,
-      "docs/mining": 503,
-      "docs/mining/submit": 503,
-      "api/public/docs": 503
+      "docs/roadmap": 404,
+      "docs/mining": 404,
+      "docs/mining/submit": 404,
+      "api/public/docs": 404
     },
     "interval_min": 1
   },
-  "checked_at": "2026-11-24T14:56:02Z",
+  "checked_at": "2026-11-24T14:57:02Z",
   "checked_by": "local",
-  "changed_at": "2026-11-24T14:56:02Z",
+  "changed_at": "2026-11-24T14:57:02Z",
   "alerts": [
-    {
-      "at": "2026-11-24T13:22:02Z",
-      "kind": "docs-page",
-      "page": "docs/guide/the-ladder",
-      "now": null,
-      "chars": [
-        7492,
-        0
-      ],
-      "text": "The organisers' page 'docs/guide/the-ladder' changed its text (7492 -> 0 characters)"
-    },
     {
       "at": "2026-11-24T13:22:02Z",
       "kind": "docs-page",
@@ -522,6 +513,17 @@
       "kind": "docs-new-page",
       "path": "docs/validators",
       "text": "A new page in the organisers' docs: https://vector.robotensor.ai/docs/validators"
+    },
+    {
+      "at": "2026-11-24T14:57:02Z",
+      "kind": "docs-page",
+      "page": "docs/reference/glossary",
+      "now": null,
+      "chars": [
+        5920,
+        6165
+      ],
+      "text": "The organisers' page 'docs/reference/glossary' changed its text (5920 -> 6165 characters)"
     }
   ]
 }
