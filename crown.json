@@ -76,7 +76,9 @@
   },
   "watch": {
     "errors": [
-      "docs: HTTPError"
+      "docs: HTTPError",
+      "docs_links: HTTPError",
+      "whitepaper: HTTPError"
     ],
     "branches": {
       "vector-orchestrator": {
@@ -279,16 +281,16 @@
       "modified": "Tue, 17 Nov 2026 23:35:09 GMT"
     },
     "v2_probe": {
-      "docs/roadmap": 404,
-      "docs/mining": 404,
-      "docs/mining/submit": 404,
-      "api/public/docs": 404
+      "docs/roadmap": 503,
+      "docs/mining": 503,
+      "docs/mining/submit": 503,
+      "api/public/docs": 503
     },
     "interval_min": 1
   },
-  "checked_at": "2026-11-24T14:06:01Z",
+  "checked_at": "2026-11-24T14:07:02Z",
   "checked_by": "local",
-  "changed_at": "2026-11-24T14:06:01Z",
+  "changed_at": "2026-11-24T14:07:02Z",
   "alerts": [
     {
       "at": "2026-11-24T13:22:02Z",
