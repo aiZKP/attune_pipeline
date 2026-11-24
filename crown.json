@@ -76,7 +76,10 @@
   },
   "watch": {
     "errors": [
-      "docs: HTTPError"
+      "docs: HTTPError",
+      "blog: HTTPError",
+      "docs_links: HTTPError",
+      "whitepaper: HTTPError"
     ],
     "branches": {
       "vector-orchestrator": {
@@ -294,9 +297,9 @@
     },
     "interval_min": 1
   },
-  "checked_at": "2026-11-24T16:41:02Z",
+  "checked_at": "2026-11-24T16:42:02Z",
   "checked_by": "local",
-  "changed_at": "2026-11-24T16:41:02Z",
+  "changed_at": "2026-11-24T16:42:02Z",
   "alerts": [
     {
       "at": "2026-11-24T13:22:02Z",
