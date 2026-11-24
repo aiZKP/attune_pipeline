@@ -75,9 +75,7 @@
     }
   },
   "watch": {
-    "errors": [
-      "whitepaper: HTTPError"
-    ],
+    "errors": [],
     "branches": {
       "vector-orchestrator": {
         "main": "9b14b234bf3bd5ea4aa4d0a06632647927550314",
@@ -295,9 +293,9 @@
     },
     "interval_min": 1
   },
-  "checked_at": "2026-11-24T21:27:02Z",
+  "checked_at": "2026-11-24T21:28:02Z",
   "checked_by": "local",
-  "changed_at": "2026-11-24T21:27:02Z",
+  "changed_at": "2026-11-24T21:28:02Z",
   "alerts": [
     {
       "at": "2026-11-24T13:22:02Z",
