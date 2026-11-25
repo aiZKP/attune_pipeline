@@ -158,7 +158,7 @@
       "attune-subnet": "2026-11-20T14:09:39Z",
       "vector-orchestrator": "2026-11-09T13:12:31Z",
       "RoboTwin-Vector": "2026-10-07T17:29:41Z",
-      "vector-miner": "2026-11-24T15:52:37Z",
+      "vector-miner": "2026-11-25T14:52:11Z",
       "vector-env": "2026-11-24T15:52:42Z",
       "vector-sim": "2026-11-24T15:52:48Z",
       "vector-validator": "2026-11-24T15:52:54Z"
@@ -293,21 +293,10 @@
     },
     "interval_min": 1
   },
-  "checked_at": "2026-11-25T14:52:02Z",
+  "checked_at": "2026-11-25T14:53:02Z",
   "checked_by": "local",
-  "changed_at": "2026-11-25T14:52:02Z",
+  "changed_at": "2026-11-25T14:53:02Z",
   "alerts": [
-    {
-      "at": "2026-11-24T13:22:02Z",
-      "kind": "docs-page",
-      "page": "docs/reference/the-record",
-      "now": null,
-      "chars": [
-        4025,
-        0
-      ],
-      "text": "The organisers' page 'docs/reference/the-record' changed its text (4025 -> 0 characters)"
-    },
     {
       "at": "2026-11-24T13:22:02Z",
       "kind": "docs-page",
@@ -503,6 +492,14 @@
       "id": "datasets/robotensor/vector-bundle",
       "change": "changed",
       "text": "The organisers' Hugging Face account: datasets/robotensor/vector-bundle is changed"
+    },
+    {
+      "at": "2026-11-25T14:53:02Z",
+      "kind": "repo-push",
+      "name": "vector-miner",
+      "from": "2026-11-24T15:52:37Z",
+      "to": "2026-11-25T14:52:11Z",
+      "text": "New commits on robotensor/vector-miner (pushed 2026-11-25T14:52:11Z): outside the three pinned repositories, where a new model or benchmark (World Action Model, ICIL) would be built"
     }
   ]
 }
