@@ -75,7 +75,9 @@
     }
   },
   "watch": {
-    "errors": [],
+    "errors": [
+      "whitepaper: HTTPError"
+    ],
     "branches": {
       "vector-orchestrator": {
         "main": "9b14b234bf3bd5ea4aa4d0a06632647927550314",
@@ -255,7 +257,7 @@
     "hf_org": {
       "models/robotensor/vector-kings": "2026-11-13T11:10:53",
       "models/robotensor/vector_base": "2026-10-12T11:40:57",
-      "datasets/robotensor/vector-bundle": "2026-11-24T18:10:09",
+      "datasets/robotensor/vector-bundle": "2026-11-25T06:34:19",
       "datasets/robotensor/robotwin-aloha-clean": "2026-09-16T23:13:07"
     },
     "docs_links": [
@@ -293,21 +295,10 @@
     },
     "interval_min": 1
   },
-  "checked_at": "2026-11-25T06:56:02Z",
+  "checked_at": "2026-11-25T06:57:02Z",
   "checked_by": "local",
-  "changed_at": "2026-11-25T06:56:02Z",
+  "changed_at": "2026-11-25T06:57:02Z",
   "alerts": [
-    {
-      "at": "2026-11-24T13:22:02Z",
-      "kind": "docs-page",
-      "page": "docs/reference/key-numbers",
-      "now": null,
-      "chars": [
-        3354,
-        0
-      ],
-      "text": "The organisers' page 'docs/reference/key-numbers' changed its text (3354 -> 0 characters)"
-    },
     {
       "at": "2026-11-24T13:22:02Z",
       "kind": "docs-page",
@@ -507,6 +498,13 @@
       "id": "datasets/robotensor/vector-bundle",
       "change": "new",
       "text": "The organisers' Hugging Face account: datasets/robotensor/vector-bundle is new"
+    },
+    {
+      "at": "2026-11-25T06:57:02Z",
+      "kind": "hf-repo",
+      "id": "datasets/robotensor/vector-bundle",
+      "change": "changed",
+      "text": "The organisers' Hugging Face account: datasets/robotensor/vector-bundle is changed"
     }
   ]
 }
