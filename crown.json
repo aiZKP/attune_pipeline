@@ -161,7 +161,8 @@
       "vector-miner": "2026-11-25T14:52:11Z",
       "vector-env": "2026-11-24T15:52:42Z",
       "vector-sim": "2026-11-24T15:52:48Z",
-      "vector-validator": "2026-11-24T15:52:54Z"
+      "vector-validator": "2026-11-24T15:52:54Z",
+      "vector-app": "2026-11-25T16:12:37Z"
     },
     "org_repos": [
       ".github",
@@ -170,6 +171,7 @@
       "RoboTwin-ICIL",
       "RoboTwin-Vector",
       "attune-subnet",
+      "vector-app",
       "vector-env",
       "vector-miner",
       "vector-orchestrator",
@@ -293,21 +295,10 @@
     },
     "interval_min": 1
   },
-  "checked_at": "2026-11-25T16:12:02Z",
+  "checked_at": "2026-11-25T16:14:01Z",
   "checked_by": "local",
-  "changed_at": "2026-11-25T16:12:02Z",
+  "changed_at": "2026-11-25T16:14:01Z",
   "alerts": [
-    {
-      "at": "2026-11-24T13:22:02Z",
-      "kind": "docs-page",
-      "page": "docs/rules/honest-measurement",
-      "now": null,
-      "chars": [
-        4874,
-        0
-      ],
-      "text": "The organisers' page 'docs/rules/honest-measurement' changed its text (4874 -> 0 characters)"
-    },
     {
       "at": "2026-11-24T13:22:02Z",
       "kind": "docs-page",
@@ -500,6 +491,12 @@
       "from": "2026-11-24T15:52:37Z",
       "to": "2026-11-25T14:52:11Z",
       "text": "New commits on robotensor/vector-miner (pushed 2026-11-25T14:52:11Z): outside the three pinned repositories, where a new model or benchmark (World Action Model, ICIL) would be built"
+    },
+    {
+      "at": "2026-11-25T16:14:01Z",
+      "kind": "repo",
+      "name": "vector-app",
+      "text": "New public repository: robotensor/vector-app"
     }
   ]
 }
