@@ -103,7 +103,7 @@
   // ------------------------------------------------------------------------------------------ state
   let BLOB = null, STATE = null, RAW = null, CROWN = null, HIST = null;
   let SIG = null, SIG_CT = null, SIG_SRC = "", SIG_ERR = "", sigBusy = false;
-  const UI = { tab: "overview", exp: null, method: null, tables: {} };
+  const UI = { tab: "binpick", exp: null, method: null, tables: {} };
   const keyName = () => CONF.keyStore + ":" + (BLOB ? BLOB.salt : "");
 
   // ------------------------------------------------------------------------------------------ chips
@@ -597,11 +597,12 @@
 
   // ------------------------------------------------------------------------------------------ tabs
   const TABS = [
-    ["overview", "Overview"], ["methods", "Methods"], ["experiments", "Experiments"], ["candidates", "Candidates"],
+    ["binpick", "Bin picking"], ["overview", "Overview"], ["methods", "Methods"], ["experiments", "Experiments"], ["candidates", "Candidates"],
     ["bans", "Bans"], ["competition", "Competition"], ["journal", "Journal"], ["notes", "Notes"],
   ];
   function tabsNav() {
     const counts = {
+      binpick: ((STATE.binpick || {}).methods || []).length,
       methods: (STATE.methods || []).length, experiments: (STATE.experiments || []).length,
       candidates: (STATE.candidates || []).length, bans: (STATE.bans || []).length,
       notes: (STATE.notes || []).length + (STATE.proposals || []).length,
@@ -617,6 +618,7 @@
   }
   function tabBody() {
     switch (UI.tab) {
+      case "binpick": return STATE.binpick ? binpickTab() : overviewTab();
       case "methods": return methodsTab();
       case "experiments": return experimentsTab();
       case "candidates": return candidatesTab();
@@ -629,6 +631,70 @@
   }
   function panel(title, hint, body, extra) {
     return h("section", { class: "panel" }, h("h2", null, title, hint ? h("span", { class: "hint", text: hint }) : null, extra || null), body);
+  }
+
+  // ------------------------------------------------------------------------------------------ bin picking
+  // The bin-picking programme (ledger/competition/binpick.json, kept by Session A; Session B adds one result file per
+  // method under ledger/binpick/results/, merged at publish as method.measured). A state is an icon plus a word.
+  const BP_STATE = {
+    kept: ["good", "✓", "Kept"], banned: ["critical", "✕", "Banned"], running: ["info", "▶", "Running"],
+    queued: ["warning", "◷", "Queued"], tested: ["info", "◆", "Tested by A"], research: ["neutral", "…", "Research"],
+    proposed: ["neutral", "○", "Proposed"], waiting: ["neutral", "○", "Waiting"],
+  };
+  function bpChip(state) {
+    const c = BP_STATE[String(state || "").toLowerCase()] || ["neutral", "•", String(state || "unknown")];
+    return h("span", { class: "chip " + c[0] }, h("span", { class: "ico", "aria-hidden": "true", text: c[1] }), c[2]);
+  }
+  const bpState = (m) => String((m.measured && m.measured.verdict) || m.state || "proposed").toLowerCase();
+  function bpResult(m) {
+    const r = m.measured;
+    if (!r) return m.result || "";
+    const parts = (r.sets || []).map((x) => x.name + ": " + x.before + " → " + x.after +
+      (isNum(x.gained) ? " (+" + x.gained + " −" + (x.lost || 0) + ")" : ""));
+    if (r.note) parts.push(r.note);
+    return parts.join(" · ");
+  }
+  function bpLevels(p) {
+    const lv = (p.levels || []).slice();
+    (p.methods || []).forEach((m) => {
+      const f = m.measured && m.measured.final;
+      if (f && isNum(f.solved)) lv.push({ name: f.name || m.id, solved: f.solved, of: f.of || 1000, set: f.set || "", note: m.title });
+    });
+    return lv;
+  }
+  function binpickTab() {
+    const p = STATE.binpick;
+    const lv = bpLevels(p), last = lv[lv.length - 1] || null;
+    const methods = p.methods || [];
+    const count = (st) => methods.filter((m) => bpState(m) === st).length;
+    const goal = isNum(p.goal) ? p.goal : 0.99;
+    const perK = (x) => Math.round(x * 1000);
+    const of = last ? (last.of || 1000) : 1000;
+    const tiles = h("div", { class: "kpis" },
+      tile("Our best measured version", last ? (last.solved / of).toFixed(3) : "—",
+        last ? last.name + " · " + last.solved + " of " + fmtInt(of) + " scenes" + (last.set ? " · set " + last.set : "") : "", { hero: true }),
+      tile("Goal", goal.toFixed(3), last ? "to remove: " + Math.max(0, perK(goal) - last.solved) + " of the " + (of - last.solved) + " failures in 1,000 scenes" : ""),
+      tile("Rank line on the board", isNum(p.rank_line) ? p.rank_line.toFixed(3) : "—", p.board_note || ""),
+      tile("Methods", count("kept") + " kept · " + count("banned") + " banned",
+        (count("running") + count("queued") + count("tested")) + " waiting or running · " + count("research") + " in research"),
+      tile("Round ends", p.round_ends ? untilText(p.round_ends) : "—", p.round_note || ""));
+    const head = ["Id", "Method", "Aims at", "Session A's test", "State", "Session B's measurement"];
+    const rows = methods.map((m) => h("tr", null,
+      h("td", { class: "mono", text: m.id }),
+      h("td", null, h("div", { text: m.title }), m.cycle ? h("div", { class: "meta", text: "cycle " + m.cycle }) : null),
+      h("td", { text: m.targets || "" }), h("td", { text: m.a_test || "" }),
+      h("td", { class: "state" }, bpChip(bpState(m))), h("td", { text: bpResult(m) })));
+    return h("div", null, tiles,
+      h("div", { class: "grid2" },
+        panel("Solved per 1,000 scenes, version by version", "each version on its own fresh set of 1,000 scenes",
+          chartBox("bplevels", { rows: lv, goal: perK(goal), rank: isNum(p.rank_line) ? perK(p.rank_line) : null })),
+        panel("What still fails", (p.failures && p.failures.note) || "",
+          chartBox("bpfail", { rows: (p.failures && p.failures.classes) || [], of: p.failures && p.failures.of }))),
+      panel("Methods, one at a time", "updated " + ago(p.updated),
+        h("div", null,
+          p.rule ? h("p", { class: "meta", text: p.rule }) : null,
+          h("div", { class: "tablewrap" }, h("table", { class: "steps" },
+            h("thead", null, h("tr", null, head.map((t) => h("th", { text: t })))), h("tbody", null, rows))))));
   }
 
   // ------------------------------------------------------------------------------------------ overview
@@ -931,8 +997,14 @@
       if (!spec) return;
       holder.replaceChildren();
       const W = Math.max(280, Math.floor(holder.clientWidth || 600));
-      if (UI.tables[spec.kind]) { holder.append(spec.kind === "delta" ? deltaTable(spec.data.rows) : dumbbellTable(spec.data.v)); return; }
+      if (UI.tables[spec.kind]) {
+        holder.append(spec.kind === "delta" ? deltaTable(spec.data.rows) : spec.kind === "bplevels" ? bpLevelsTable(spec.data)
+          : spec.kind === "bpfail" ? bpFailTable(spec.data) : dumbbellTable(spec.data.v));
+        return;
+      }
       if (spec.kind === "delta") deltaChart(holder, W, spec.data.rows);
+      else if (spec.kind === "bplevels") bpLevelsChart(holder, W, spec.data);
+      else if (spec.kind === "bpfail") bpFailChart(holder, W, spec.data);
       else dumbbellChart(holder, W, spec.data.v);
     });
   }
@@ -982,6 +1054,102 @@
     rect.addEventListener("pointerleave", hide);
     rect.addEventListener("focus", show);
     rect.addEventListener("blur", hide);
+  }
+
+  // Bin picking: scenes solved per 1,000, version by version (one series, so no legend; the goal and the rank line are
+  // reference lines labelled in text ink; the last point carries its value; every point has a tooltip).
+  function bpLevelsChart(holder, W, data) {
+    const rows = data.rows || [];
+    if (!rows.length) { holder.append(h("div", { class: "empty", text: "No measured version yet." })); return; }
+    const H = 280, m = { l: 44, r: 104, t: 14, b: 44 };
+    const refs = [[data.goal, "goal"], [data.rank, "rank line"]].filter((r) => isNum(r[0]));
+    const vals = rows.map((d) => d.solved).concat(refs.map((r) => r[0]));
+    const lo = Math.floor((Math.min.apply(null, vals) - 6) / 10) * 10, hi = Math.min(1000, Math.ceil((Math.max.apply(null, vals) + 4) / 10) * 10);
+    const iw = W - m.l - m.r, ih = H - m.t - m.b;
+    const y = (v) => m.t + ((hi - v) / (hi - lo)) * ih;
+    const step = iw / rows.length, x = (i) => m.l + step * (i + 0.5);
+    const svgEl = s("svg", { viewBox: "0 0 " + W + " " + H, width: W, height: H, role: "img", "aria-label": "Scenes solved per 1,000, version by version, against the goal and the rank line" });
+    niceTicks(lo, hi, 5).forEach((t) => {
+      svgEl.append(s("line", { class: "gridline", x1: m.l, x2: W - m.r, y1: y(t), y2: y(t) }));
+      svgEl.append(s("text", { x: m.l - 6, y: y(t) + 4, "text-anchor": "end" }, String(t)));
+    });
+    let lastLabY = null;
+    refs.sort((a, b) => b[0] - a[0]).forEach((r) => {
+      svgEl.append(s("line", { class: "ref", x1: m.l, x2: W - m.r, y1: y(r[0]), y2: y(r[0]), "stroke-dasharray": "4 3" }));
+      let ly = y(r[0]) + 4;
+      if (lastLabY !== null && ly - lastLabY < 14) ly = lastLabY + 14;
+      lastLabY = ly;
+      svgEl.append(s("text", { class: "lab", x: W - m.r + 6, y: ly }, r[1] + " " + r[0]));
+    });
+    const accent = cssVar("--accent"), surface = cssVar("--surface-1");
+    if (rows.length > 1) svgEl.append(s("path", { d: rows.map((d, i) => (i ? "L" : "M") + x(i) + " " + y(d.solved)).join(" "), fill: "none", stroke: accent, "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round" }));
+    const every = Math.max(1, Math.ceil(rows.length / Math.max(1, Math.floor(iw / 64))));
+    rows.forEach((d, i) => {
+      svgEl.append(s("circle", { cx: x(i), cy: y(d.solved), r: 5, fill: accent, stroke: surface, "stroke-width": 2 }));
+      if (i % every === 0 || i === rows.length - 1) svgEl.append(s("text", { x: x(i), y: H - m.b + 16, "text-anchor": "middle" }, d.name));
+    });
+    const lastRow = rows[rows.length - 1];
+    svgEl.append(s("text", { class: "strong", x: x(rows.length - 1) + 9, y: y(lastRow.solved) - 8 }, String(lastRow.solved)));
+    svgEl.append(s("text", { x: m.l, y: H - 6 }, "version"));
+    const tip = tipLayer(holder);
+    rows.forEach((d, i) => {
+      const hw = Math.max(24, step);
+      const r = s("rect", { class: "hit", x: x(i) - hw / 2, y: m.t, width: hw, height: ih, tabindex: 0, role: "button",
+        "aria-label": d.name + ": " + d.solved + " of " + (d.of || 1000) + " scenes solved" });
+      const tipRows = [{ label: "Solved", value: d.solved + " of " + fmtInt(d.of || 1000), color: accent }];
+      if (d.set) tipRows.push({ label: "Set", value: String(d.set) });
+      if (isNum(d.paired)) tipRows.push({ label: "Version before, same scenes", value: String(d.paired) });
+      if (isNum(data.goal)) tipRows.push({ label: "Short of the goal", value: String(Math.max(0, data.goal - d.solved)) });
+      bindHit(r, tip, holder, (px, py) => tip.show(px, py, d.name + (d.note ? " · " + d.note : ""), tipRows));
+      svgEl.append(r);
+    });
+    holder.prepend(svgEl);
+  }
+  function bpLevelsTable(data) {
+    const rows = data.rows || [];
+    if (!rows.length) return h("div", { class: "empty", text: "No measured version yet." });
+    return h("div", { class: "tablewrap" }, h("table", null,
+      h("thead", null, h("tr", null, ["Version", "Set", "Solved", "Of", "Version before, same scenes", "Note"].map((t, i) => h("th", { class: i >= 2 && i <= 4 ? "num" : null, text: t })))),
+      h("tbody", null, rows.map((d) => h("tr", null, h("td", { class: "mono", text: d.name }), h("td", { text: String(d.set || "") }),
+        h("td", { class: "num", text: String(d.solved) }), h("td", { class: "num", text: fmtInt(d.of || 1000) }),
+        h("td", { class: "num", text: isNum(d.paired) ? String(d.paired) : "—" }), h("td", { text: d.note || "" }))))));
+  }
+  // Bin picking: the scenes that still fail, by what would fix them (magnitude: one hue, bars from a common baseline with
+  // a rounded data end, the category named above each bar and the count at its end).
+  function bpFailChart(holder, W, data) {
+    const rows = data.rows || [];
+    if (!rows.length) { holder.append(h("div", { class: "empty", text: "No failure census yet." })); return; }
+    const m = { l: 2, r: 46, t: 4, b: 6 }, labH = 18, barH = 14, gap = 12;
+    const H = m.t + rows.length * (labH + barH + gap) + m.b;
+    const max = Math.max.apply(null, rows.map((d) => d.n)) || 1, iw = W - m.l - m.r;
+    const total = isNum(data.of) ? data.of : rows.reduce((a, d) => a + d.n, 0);
+    const svgEl = s("svg", { viewBox: "0 0 " + W + " " + H, width: W, height: H, role: "img", "aria-label": "Scenes that still fail, by what would fix them" });
+    const accent = cssVar("--accent");
+    const tip = tipLayer(holder);
+    rows.forEach((d, i) => {
+      const y0 = m.t + i * (labH + barH + gap);
+      svgEl.append(s("text", { class: "lab", x: m.l, y: y0 + 12 }, d.name));
+      const w = Math.max(2, (d.n / max) * iw), yb = y0 + labH, rr = Math.min(4, w / 2);
+      svgEl.append(s("path", { d: "M" + m.l + " " + yb + " h" + (w - rr) + " a" + rr + " " + rr + " 0 0 1 " + rr + " " + rr + " v" + (barH - 2 * rr) +
+        " a" + rr + " " + rr + " 0 0 1 " + (-rr) + " " + rr + " h" + (-(w - rr)) + " z", fill: accent }));
+      svgEl.append(s("text", { class: "strong", x: m.l + w + 6, y: yb + barH - 3 }, String(d.n)));
+      const r = s("rect", { class: "hit", x: m.l, y: y0, width: W - m.l, height: labH + barH + 2, tabindex: 0, role: "button",
+        "aria-label": d.name + ": " + d.n + " of " + total + " failing scenes" });
+      const tipRows = [{ label: "Scenes", value: d.n + " of " + total, color: accent }, { label: "Share", value: Math.round((100 * d.n) / total) + "%" }];
+      if (d.fix) tipRows.push({ label: "Method", value: d.fix });
+      bindHit(r, tip, holder, (px, py) => tip.show(px, py, d.name, tipRows));
+      svgEl.append(r);
+    });
+    holder.prepend(svgEl);
+  }
+  function bpFailTable(data) {
+    const rows = data.rows || [];
+    if (!rows.length) return h("div", { class: "empty", text: "No failure census yet." });
+    const total = isNum(data.of) ? data.of : rows.reduce((a, d) => a + d.n, 0);
+    return h("div", { class: "tablewrap" }, h("table", null,
+      h("thead", null, h("tr", null, ["What still fails", "Scenes", "Share", "Method that aims at it"].map((t, i) => h("th", { class: i === 1 || i === 2 ? "num" : null, text: t })))),
+      h("tbody", null, rows.map((d) => h("tr", null, h("td", { text: d.name }), h("td", { class: "num", text: String(d.n) }),
+        h("td", { class: "num", text: Math.round((100 * d.n) / total) + "%" }), h("td", { text: d.fix || "" }))))));
   }
 
   function deltaChart(holder, W, rows) {
