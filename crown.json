@@ -75,7 +75,9 @@
     }
   },
   "watch": {
-    "errors": [],
+    "errors": [
+      "whitepaper: HTTPError"
+    ],
     "branches": {
       "vector-orchestrator": {
         "main": "9b14b234bf3bd5ea4aa4d0a06632647927550314",
@@ -230,8 +232,8 @@
         "gone": true
       },
       "docs/reference/glossary": {
-        "sha": "736cf2cc90fe",
-        "chars": 6165
+        "sha": "0b3bb039e64e",
+        "chars": 6352
       },
       "docs/reference/the-record": {
         "sha": null,
@@ -295,21 +297,10 @@
     },
     "interval_min": 1
   },
-  "checked_at": "2026-11-26T08:28:02Z",
+  "checked_at": "2026-11-26T08:29:02Z",
   "checked_by": "local",
-  "changed_at": "2026-11-26T08:28:02Z",
+  "changed_at": "2026-11-26T08:29:02Z",
   "alerts": [
-    {
-      "at": "2026-11-24T13:22:02Z",
-      "kind": "docs-page",
-      "page": "home",
-      "now": null,
-      "chars": [
-        3235,
-        2056
-      ],
-      "text": "The organisers' page 'home' changed its text (3235 -> 2056 characters)"
-    },
     {
       "at": "2026-11-24T13:22:02Z",
       "kind": "docs-new-page",
@@ -494,6 +485,17 @@
       "from": "2026-11-25T14:52:11Z",
       "to": "2026-11-26T07:57:21Z",
       "text": "New commits on robotensor/vector-miner (pushed 2026-11-26T07:57:21Z): outside the three pinned repositories, where a new model or benchmark (World Action Model, ICIL) would be built"
+    },
+    {
+      "at": "2026-11-26T08:29:02Z",
+      "kind": "docs-page",
+      "page": "docs/reference/glossary",
+      "now": null,
+      "chars": [
+        6165,
+        6352
+      ],
+      "text": "The organisers' page 'docs/reference/glossary' changed its text (6165 -> 6352 characters)"
     }
   ]
 }
