@@ -325,6 +325,16 @@
       "name": "vector-miner",
       "from": "2026-11-25T14:52:11Z",
       "to": "2026-11-26T07:57:21Z"
+    },
+    {
+      "at": "2026-11-26T08:29:02Z",
+      "kind": "docs-page",
+      "page": "docs/reference/glossary",
+      "now": null,
+      "chars": [
+        6165,
+        6352
+      ]
     }
   ]
 }
