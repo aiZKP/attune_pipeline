@@ -640,6 +640,7 @@
     kept: ["good", "✓", "Kept"], banned: ["critical", "✕", "Banned"], running: ["info", "▶", "Running"],
     queued: ["warning", "◷", "Queued"], tested: ["info", "◆", "Tested by A"], research: ["neutral", "…", "Research"],
     proposed: ["neutral", "○", "Proposed"], waiting: ["neutral", "○", "Waiting"],
+    measured: ["info", "≈", "Measured"], replaced: ["neutral", "↷", "Replaced"],
   };
   function bpChip(state) {
     const c = BP_STATE[String(state || "").toLowerCase()] || ["neutral", "•", String(state || "unknown")];
