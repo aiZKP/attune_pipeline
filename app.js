@@ -1,34 +1,23 @@
-/* Attune pipeline dashboard: decrypts the ledger state in the browser and renders it.
-   Data: raw.githubusercontent.com/aiZKP/attune_pipeline/data/{state.enc.json, crown.json, crown-history.json}
-   (or ./data/ with ?src=local). Untrusted strings are inserted with textContent; markdown is escaped first. */
+/* Vector V2 (Bin picking) dashboard: decrypts the lab's state and the live feed in the browser and renders them.
+   Data: raw.githubusercontent.com/aiZKP/attune_pipeline/data/state.enc.json (the lab's state, on every publish) and
+   signals.enc.json (the live feed, every minute, read through the GitHub API). ?src=local reads ./data/ instead.
+   Every string from the data is inserted with textContent. */
 "use strict";
 (function () {
   const params = new URLSearchParams(location.search);
   const CONF = {
-    owner: "aiZKP",
-    labRepo: "attune-lab",
     dataBase: params.get("src") === "local" ? "./data/" : "https://raw.githubusercontent.com/aiZKP/attune_pipeline/data/",
-    refreshMs: 60000,
-    // live signals of the watches and the auto-submitter: read through the GitHub API, which is not cached for
-    // minutes like the raw-file host; conditional requests that come back unchanged do not count against its limit
     signalsApi: "https://api.github.com/repos/aiZKP/attune_pipeline/contents/signals.enc.json?ref=data",
-    signalsMs: 20000,
-    keyStore: "attune.key.v1",
+    stateMs: 60000, signalsMs: 20000, keyStore: "attune.key.v1",
   };
 
   // ------------------------------------------------------------------------------------------ utils
-  const $ = (s, r) => (r || document).querySelector(s);
+  const $ = (sel, r) => (r || document).querySelector(sel);
   const store = {
     get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
     set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* private mode */ } },
     del(k) { try { localStorage.removeItem(k); } catch (e) { /* ignore */ } },
   };
-  function safeUrl(u) {
-    try {
-      const x = new URL(u, location.href);
-      return x.protocol === "https:" || x.protocol === "http:" ? x.href : "#";
-    } catch (e) { return "#"; }
-  }
   function h(tag, props) {
     const e = document.createElement(tag);
     if (props) {
@@ -37,9 +26,7 @@
         if (v === null || v === undefined || v === false) continue;
         if (k === "class") e.className = v;
         else if (k === "text") e.textContent = v;
-        else if (k === "html") e.innerHTML = v; // only ever sanitized markdown
         else if (k.slice(0, 2) === "on") e.addEventListener(k.slice(2), v);
-        else if (k === "href") e.setAttribute("href", safeUrl(v));
         else e.setAttribute(k, v === true ? "" : String(v));
       }
     }
@@ -59,27 +46,34 @@
     return e;
   }
   const isNum = (x) => typeof x === "number" && isFinite(x);
-  function pts(x, d) {
-    if (!isNum(x)) return "—";
-    const v = Math.abs(x).toFixed(d === undefined ? 1 : d);
-    return (x > 0 ? "+" : x < 0 ? "−" : "±") + v;
-  }
-  const pct = (x) => (isNum(x) ? Math.round(x * 100) + "%" : "—");
-  function ago(iso) {
-    if (!iso) return "—";
-    const t = Date.parse(iso);
-    if (!isFinite(t)) return String(iso);
-    const s = Math.max(0, (Date.now() - t) / 1000);
-    if (s < 90) return "just now";
-    if (s < 3600) return Math.round(s / 60) + " min ago";
-    if (s < 172800) return Math.round(s / 3600) + " h ago";
-    return Math.round(s / 86400) + " days ago";
-  }
-  const shortTask = (t) => String(t).replace(/^place_/, "").replace(/_/g, " ");
+  const fmtInt = (n) => (isNum(n) ? n.toLocaleString("en-US") : "—");
+  const pct1 = (x) => (isNum(x) ? (100 * x).toFixed(1) + "%" : "—");
+  const score3 = (x) => (isNum(x) ? x.toFixed(3) : "—");
   const b64d = (str) => Uint8Array.from(atob(str), (c) => c.charCodeAt(0));
-  function b64e(u8) { let s = ""; u8.forEach((b) => { s += String.fromCharCode(b); }); return btoa(s); }
+  function b64e(u8) { let o = ""; u8.forEach((b) => { o += String.fromCharCode(b); }); return btoa(o); }
+  function ago(iso) {
+    const t = Date.parse(iso);
+    if (!isFinite(t)) return "—";
+    const sec = Math.max(0, (Date.now() - t) / 1000);
+    if (sec < 90) return Math.round(sec) + " s ago";
+    if (sec < 5400) return Math.round(sec / 60) + " min ago";
+    if (sec < 172800) return Math.round(sec / 3600) + " h ago";
+    return Math.round(sec / 86400) + " days ago";
+  }
+  function until(iso) {
+    const ms = Date.parse(iso) - Date.now();
+    if (!isFinite(ms)) return "—";
+    if (ms <= 0) return "ended";
+    const m = Math.floor(ms / 60000), d = Math.floor(m / 1440), hh = Math.floor((m % 1440) / 60);
+    return d > 0 ? d + " d " + hh + " h" : hh > 0 ? hh + " h " + (m % 60) + " min" : m + " min";
+  }
+  function when(iso) {
+    const t = Date.parse(iso);
+    return isFinite(t) ? new Date(t).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : String(iso || "—");
+  }
+  const owner = (image) => String(image || "").replace(/^ghcr\.io\//, "").split("@")[0];
 
-  // ------------------------------------------------------------------------------------------ crypto
+  // ------------------------------------------------------------------------------------------ crypto and data
   async function deriveRaw(pass, saltB64, iter) {
     const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(pass), "PBKDF2", false, ["deriveBits"]);
     const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt: b64d(saltB64), iterations: iter }, base, 256);
@@ -99,1176 +93,374 @@
     if (!r.ok) throw new Error(name + ": HTTP " + r.status);
     return r.json();
   }
-
-  // ------------------------------------------------------------------------------------------ state
-  let BLOB = null, STATE = null, RAW = null, CROWN = null, HIST = null;
-  let SIG = null, SIG_CT = null, SIG_SRC = "", SIG_ERR = "", sigBusy = false;
-  const UI = { tab: "binpick", exp: null, method: null, tables: {} };
-  const keyName = () => CONF.keyStore + ":" + (BLOB ? BLOB.salt : "");
-
-  // ------------------------------------------------------------------------------------------ chips
-  const CHIP = {
-    "submit-ready": ["good", "★", "Submit-ready"],
-    correct: ["good", "✓", "Correct"],
-    promising: ["info", "↗", "Promising"],
-    inconclusive: ["neutral", "?", "Inconclusive"],
-    invalid: ["serious", "!", "Invalid"],
-    false: ["critical", "✕", "False"],
-    banned: ["critical", "⊘", "Banned"],
-    running: ["info", "▶", "Running"],
-    "awaiting-verdict": ["info", "…", "Awaiting verdict"],
-    blocked: ["warning", "■", "Blocked"],
-    queued: ["neutral", "•", "Queued"],
-    ready: ["neutral", "•", "Ready"],
-    draft: ["neutral", "✎", "Draft"],
-    done: ["good", "✓", "Done"],
-    withdrawn: ["neutral", "–", "Withdrawn"],
-    aborted: ["neutral", "–", "Aborted"],
-    vaulted: ["info", "◆", "Vaulted"],
-    approved: ["good", "✓", "Approved"],
-    submitted: ["info", "⇪", "Submitted"],
-    crowned: ["good", "♛", "Crowned"],
-    lost: ["critical", "✕", "Lost"],
-    superseded: ["neutral", "–", "Superseded"],
-    exact: ["neutral", "◦", "Exact"],
-    variant: ["warning", "◐", "Variant"],
-    family: ["critical", "●", "Family"],
-    on: ["good", "●", "On"],
-    off: ["neutral", "○", "Off"],
-  };
-  function chip(status) {
-    const key = String(status || "").toLowerCase();
-    const c = CHIP[key] || ["neutral", "•", String(status || "unknown")];
-    return h("span", { class: "chip " + c[0] }, h("span", { class: "ico", "aria-hidden": "true", text: c[1] }), c[2]);
-  }
-
-  // ------------------------------------------------------------------------------------------ markdown
-  const ESC = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
-  const esc = (t) => String(t).replace(/[&<>"']/g, (c) => ESC[c]);
-  function inline(src) {
-    let t = esc(src);
-    const codes = [];
-    t = t.replace(/`([^`]+)`/g, (_, c) => { codes.push(c); return "\u0000" + (codes.length - 1) + "\u0000"; });
-    t = t.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_, txt, url) => '<a href="' + url + '" target="_blank" rel="noopener noreferrer">' + txt + "</a>");
-    t = t.replace(/(^|[\s(])(https?:\/\/[^\s<)]+)/g, (_, pre, url) => pre + '<a href="' + url + '" target="_blank" rel="noopener noreferrer">' + url + "</a>");
-    t = t.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
-    t = t.replace(/(^|[^*\w])\*([^*\s][^*]*?)\*(?!\w)/g, "$1<em>$2</em>");
-    t = t.replace(/\u0000(\d+)\u0000/g, (_, i) => "<code>" + codes[Number(i)] + "</code>");
-    return t;
-  }
-  function splitRow(line) {
-    let l = line.trim();
-    if (l.startsWith("|")) l = l.slice(1);
-    if (l.endsWith("|")) l = l.slice(0, -1);
-    return l.split("|").map((c) => c.trim());
-  }
-  function md(src) {
-    const lines = String(src || "").replace(/\r/g, "").split("\n");
-    const out = [];
-    let i = 0;
-    const isList = (l) => /^\s*([-*+]|\d+\.)\s+/.test(l);
-    const blockStart = (l) => /^```/.test(l) || /^#{1,6}\s/.test(l) || isList(l) || /^\s*\|/.test(l);
-    while (i < lines.length) {
-      const L = lines[i];
-      if (/^```/.test(L)) {
-        const buf = [];
-        i++;
-        while (i < lines.length && !/^```/.test(lines[i])) buf.push(lines[i++]);
-        i++;
-        out.push("<pre><code>" + esc(buf.join("\n")) + "</code></pre>");
-        continue;
-      }
-      const hm = L.match(/^(#{1,6})\s+(.*)$/);
-      if (hm) {
-        const lvl = Math.min(hm[1].length + 1, 4);
-        out.push("<h" + lvl + ">" + inline(hm[2]) + "</h" + lvl + ">");
-        i++;
-        continue;
-      }
-      if (/^\s*\|/.test(L) && i + 1 < lines.length && /^\s*\|?\s*:?-{2,}/.test(lines[i + 1])) {
-        const head = splitRow(L);
-        i += 2;
-        const rows = [];
-        while (i < lines.length && /^\s*\|/.test(lines[i])) rows.push(splitRow(lines[i++]));
-        out.push('<div class="tablewrap"><table><thead><tr>' + head.map((c) => "<th>" + inline(c) + "</th>").join("") +
-          "</tr></thead><tbody>" + rows.map((r) => "<tr>" + r.map((c) => "<td>" + inline(c) + "</td>").join("") + "</tr>").join("") +
-          "</tbody></table></div>");
-        continue;
-      }
-      if (isList(L)) {
-        const stack = [];
-        let html = "";
-        while (i < lines.length && (isList(lines[i]) || (/^\s{2,}\S/.test(lines[i]) && stack.length))) {
-          const line = lines[i];
-          if (!isList(line)) { html += " " + inline(line.trim()); i++; continue; }
-          const m = line.match(/^(\s*)([-*+]|\d+\.)\s+(.*)$/);
-          const indent = m[1].length;
-          const tag = /\d/.test(m[2]) ? "ol" : "ul";
-          while (stack.length && indent < stack[stack.length - 1].indent) { html += "</li></" + stack.pop().tag + ">"; }
-          if (!stack.length || indent > stack[stack.length - 1].indent) { html += "<" + tag + ">"; stack.push({ indent, tag }); }
-          else html += "</li>";
-          html += "<li>" + inline(m[3]);
-          i++;
-        }
-        while (stack.length) html += "</li></" + stack.pop().tag + ">";
-        out.push(html);
-        continue;
-      }
-      if (!L.trim()) { i++; continue; }
-      const buf = [L.trim()];
-      i++;
-      while (i < lines.length && lines[i].trim() && !blockStart(lines[i])) buf.push(lines[i++].trim());
-      out.push("<p>" + inline(buf.join(" ")) + "</p>");
-    }
-    return out.join("\n");
-  }
-  const mdBox = (src) => h("div", { class: "md", html: md(src) });
-
-  // ------------------------------------------------------------------------------------------ boot
-  async function boot() {
-    $("#theme-btn").addEventListener("click", toggleTheme);
-    $("#lock-btn").addEventListener("click", () => { store.del(keyName()); RAW = null; STATE = null; SIG = null; SIG_CT = null; renderLock(); renderLive(); });
-    window.addEventListener("resize", debounce(drawCharts, 150));
-    try { matchMedia("(prefers-color-scheme: dark)").addEventListener("change", drawCharts); } catch (e) { /* old browsers */ }
-    await refreshPublic();
-    try {
-      BLOB = await getJSON("state.enc.json");
-    } catch (e) {
-      $("#app").replaceChildren(h("div", { class: "panel" }, h("div", { class: "empty", text: "No dashboard data published yet (" + e.message + ")." })));
-      return;
-    }
-    const saved = store.get(keyName());
-    if (saved) {
-      try { RAW = b64d(saved); STATE = await decryptBlob(BLOB, RAW); } catch (e) { store.del(keyName()); RAW = null; STATE = null; }
-    }
-    if (STATE) render(); else renderLock();
-    setInterval(tick, CONF.refreshMs);
-    setInterval(refreshSignals, CONF.signalsMs);
-    setInterval(renderLive, 5000);
-    refreshSignals();
-    document.addEventListener("visibilitychange", () => { if (!document.hidden) { tick(); refreshSignals(); } });
-  }
-  function debounce(fn, ms) { let t; return () => { clearTimeout(t); t = setTimeout(fn, ms); }; }
-  function toggleTheme() {
-    const root = document.documentElement;
-    const cur = root.getAttribute("data-theme") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
-    const next = cur === "dark" ? "light" : "dark";
-    root.setAttribute("data-theme", next);
-    store.set("attune.theme", next);
-    drawCharts();
-  }
-  let ticking = false;
-  async function tick() {
-    if (ticking) return;
-    ticking = true;
-    try {
-      await refreshPublic();
-      if (!RAW) return;
-      const b = await getJSON("state.enc.json");
-      if (!BLOB || b.ct !== BLOB.ct) {
-        if (b.salt !== BLOB.salt) { BLOB = b; STATE = null; RAW = null; renderLock("The key changed; enter the passphrase again."); return; }
-        STATE = await decryptBlob(b, RAW);
-        BLOB = b;
-        render();
-      } else updatedLabel();
-    } catch (e) {
-      $("#updated").textContent = "refresh failed: " + e.message;
-    } finally { ticking = false; }
-  }
-  async function refreshPublic() {
-    try { CROWN = await getJSON("crown.json"); } catch (e) { CROWN = null; }
-    try { HIST = await getJSON("crown-history.json"); } catch (e) { HIST = null; }
-    renderCrown();
-  }
-
-  // ------------------------------------------------------------------------------------------ crown strip
-  function renderCrown() {
-    const box = $("#crown");
-    const c = CROWN || (STATE && STATE.competition) || null;
-    if (!c || !c.king) { box.replaceChildren(h("span", { class: "meta", text: "Crown status unavailable." })); return; }
-    const k = c.king;
-    const item = (label, value, mono) => h("span", null, h("span", { class: "k", text: label }), h("span", { class: "v" + (mono ? " mono" : ""), text: value }));
-    const since = (STATE && STATE.competition && STATE.competition.king_since && STATE.competition.king_since.key === k.key)
-      ? STATE.competition.king_since.first_seen : c.changed_at;
-    box.replaceChildren(
-      item("King", k.repo || "—"),
-      item("key", k.key || "—", true),
-      item("Level", String(c.level !== undefined ? c.level : (c.spec && c.spec.level) || "—")),
-      item("Margin", "+" + ((c.spec && (c.spec.margin !== undefined ? c.spec.margin : c.spec.crown && c.spec.crown.margin)) || 3) + " pts"),
-      item("King seen since", ago(since)),
-      item("Gate max level", String(gateMax(c))),
-      item("Next (docs)", (c.watch && c.watch.docs && c.watch.docs.next) || "—"),
-      item("Checked", ago(c.checked_at) + (c.checked_by ? " · " + c.checked_by : "")),
-    );
-    renderAlerts(c);
-  }
-  function gateMax(c) {
-    const g = c && c.watch && c.watch.gate && c.watch.gate.vector;
-    return g && g.max_level !== null && g.max_level !== undefined ? g.max_level : "—";
-  }
-  // Level-watch alerts of the last 72 hours, newest first: a push that announces or starts a new level.
-  function renderAlerts(c) {
-    const box = $("#levelalert");
-    if (!box) return;
-    const recent = ((c && c.alerts) || []).filter((a) => Date.now() - Date.parse(a.at) < 72 * 3600 * 1000).slice(-6).reverse();
-    box.replaceChildren(...recent.map((a) => h("div", { class: "alertbar" },
-      h("strong", { text: "Level watch: " }), h("span", { text: a.text + " · " + ago(a.at) }))));
-  }
-
-  // ------------------------------------------------------------------------------------------ live signals
   async function getSignalsBlob() {
-    if (params.get("src") === "local") return [await getJSON("signals.enc.json"), "local"];
-    try {
-      const r = await fetch(CONF.signalsApi, { cache: "no-cache", headers: { Accept: "application/vnd.github.raw+json" } });
-      if (r.ok) return [await r.json(), "live"];
-    } catch (e) { /* the delayed copy below */ }
+    if (params.get("src") !== "local") {
+      try {
+        const r = await fetch(CONF.signalsApi, { cache: "no-cache", headers: { Accept: "application/vnd.github.raw+json" } });
+        if (r.ok) return [await r.json(), "live"];
+      } catch (e) { /* the delayed copy below */ }
+    }
     return [await getJSON("signals.enc.json"), "delayed"];
   }
-  async function refreshSignals() {
-    if (sigBusy || document.hidden) return;
-    if (!RAW || !BLOB) { renderLive(); return; }
-    sigBusy = true;
-    try {
-      const [b, src] = await getSignalsBlob();
-      SIG_SRC = src; SIG_ERR = "";
-      if (b.ct !== SIG_CT) {
-        if (b.salt !== BLOB.salt) SIG_ERR = "the live signals use another key";
-        else { SIG = await decryptBlob(b, RAW); SIG_CT = b.ct; }
-      }
-    } catch (e) { SIG_ERR = e.message; }
-    finally { sigBusy = false; renderLive(); }
+
+  let BLOB = null, STATE = null, RAW = null, SIG = null, SIG_CT = null, SIG_SRC = "", SIG_ERR = "", sigBusy = false, stateBusy = false;
+  const UI = { tab: store.get("attune.v2.tab") || "overview", filter: "all", open: {} };
+  const keyName = () => CONF.keyStore + ":" + (BLOB ? BLOB.salt : "");
+  const V2 = () => (SIG && SIG.v2) || {};
+
+  // ------------------------------------------------------------------------------------------ small pieces
+  const CHIPS = {
+    kept: ["good", "✓", "Kept"], banned: ["critical", "⊘", "Banned"], running: ["info", "▶", "Running"],
+    queued: ["neutral", "•", "Queued"], research: ["neutral", "✎", "Research"], invalid: ["serious", "!", "Invalid"],
+    tested: ["neutral", "◦", "Tested"], replaced: ["neutral", "–", "Replaced"], used: ["good", "✓", "Used"],
+    parked: ["neutral", "■", "Parked"], open: ["info", "?", "Open"], "dead end": ["critical", "✕", "Dead end"],
+    ready: ["good", "✓", "Ready"], planned: ["neutral", "•", "Planned"],
+  };
+  function chip(state, label) {
+    const c = CHIPS[state] || ["neutral", "•", state || "—"];
+    return h("span", { class: "chip " + c[0] }, h("span", { class: "ico", "aria-hidden": "true", text: c[1] }), label || c[2]);
   }
-  const fmtInt = (n) => (isNum(n) ? n.toLocaleString("en-US") : "—");
-  function since(sec) {
-    if (!isFinite(sec)) return "never";
-    if (sec < 90) return Math.max(0, Math.round(sec)) + " s ago";
-    if (sec < 5400) return Math.round(sec / 60) + " min ago";
-    return Math.round(sec / 3600) + " h ago";
+  function panel(title, sub) {
+    const p = h("section", { class: "panel" }, h("h2", { text: title }), sub ? h("p", { class: "sub", text: sub }) : null);
+    for (let i = 2; i < arguments.length; i++) append(p, arguments[i]);
+    return p;
   }
-  function untilText(iso) {
-    const ms = Date.parse(iso) - Date.now();
-    if (!isFinite(ms)) return "time unknown";
-    if (ms <= 0) return "now";
-    const m = Math.round(ms / 60000);
-    return m < 60 ? "in " + m + " min" : "in " + Math.floor(m / 60) + " h " + (m % 60) + " min";
+  function table(heads, rows) {
+    const t = h("table", null, h("thead", null, h("tr", null, heads.map((x) => h("th", { class: x.num ? "num" : null, text: x.t || x })))));
+    const tb = h("tbody");
+    rows.forEach((r) => tb.append(r instanceof Node ? r : h("tr", null, r.map((c, i) => (c instanceof Node && c.tagName === "TD" ? c : h("td", { class: heads[i] && heads[i].num ? "num" : null }, c))))));
+    t.append(tb);
+    return h("div", { class: "tablewrap" }, t);
   }
-  function localTime(iso) {
-    const t = Date.parse(iso);
-    return isFinite(t) ? new Date(t).toLocaleString(undefined, { weekday: "short", hour: "2-digit", minute: "2-digit" }) : "—";
+  const methodState = (m) => (m.measured && m.measured.verdict) || m.state || "queued";
+  function sixSets(m) {
+    const sets = (m.measured && m.measured.sets) || [];
+    return sets.find((x) => /six sets/i.test(x.name || "")) || sets.find((x) => (x.n || 0) >= 2000) || null;
   }
-  function renderLive() {
-    const box = $("#live");
-    if (!box) return;
-    if (!RAW) { box.replaceChildren(h("div", { class: "live-row meta", text: "Live signals: unlock with the passphrase to see them." })); return; }
-    if (!SIG) { box.replaceChildren(h("div", { class: "live-row meta", text: "Live signals: " + (SIG_ERR || "loading…") })); return; }
-    const a = SIG.auto || {}, w = SIG.watches || {};
-    const landed = (a.sends || []).filter((x) => x.ok && x.landed);
-    const counted = landed.filter((x) => x.target === null || x.target === undefined || x.landed >= x.target).map((x) => x.landed);
-    const open = (a.targets || []).filter((t) => !t.fired);
-    let cls = "good", head, detail;
-    if (counted.length) {
-      head = "SUBMITTED";
-      detail = (a.repo || "the entry") + " landed in block " + fmtInt(Math.min(...counted))
-        + (counted.length > 1 ? "; sent again " + (counted.length - 1) + "× as free insurance after a later start signal (last in block "
-          + fmtInt(Math.max(...counted)) + "; the validator counts the first one at or after the start block)" : "")
-        + (a.revealed ? "; the repository is out of private (gated)" : "; the repository is still private");
-    } else if (landed.length) {
-      cls = "warning"; head = "LANDED EARLY";
-      detail = (a.repo || "the entry") + " landed in block " + fmtInt(landed[landed.length - 1].landed)
-        + ", before its start block: not read and not spent; it is being sent again";
-    } else if (a.stop) { cls = "critical"; head = "STOPPED"; detail = "the STOP file is set: nothing will be sent"; }
-    else if ((a.problems || []).length) { cls = "critical"; head = "NOT READY"; detail = a.problems.join("; "); }
-    else if (open.length) {
-      cls = "warning"; head = "ARMED";
-      const t = open[0];
-      detail = (a.repo || "the entry") + " will land in block " + fmtInt(t.block) + ", " + untilText(t.eta)
-        + " (" + localTime(t.eta) + "); from " + (t.source || "?");
-    } else {
-      head = "READY";
-      const plan = a.force_repo
-        ? (a.force_repo === "hold" ? "held by hand (nothing will be sent)" : "chosen by hand: " + a.force_repo)
-        : "another robot → " + (a.repo || "?") + "; new tasks → " + (a.repo_tasks || "hold (no task entry yet)")
-          + "; rules only → hold";
-      detail = "waits for the next release; one submission from hotkey " + (a.hotkey || "?")
-        + " (UID " + (a.uid !== null && a.uid !== undefined ? a.uid : "?") + "), chosen by the release: " + plan
-        + ". It lands in the start block once one is known" + (a.mode_b ? ", or a few blocks after the start if none is" : "");
-    }
-    const status = h("div", { class: "live-status " + cls }, h("strong", { text: "Auto-submitter: " + head + ". " }), h("span", { text: detail }));
-    const watch = (label, at) => {
-      const sec = at ? (Date.now() - Date.parse(at)) / 1000 : Infinity;
-      const c = sec < 240 ? "good" : sec < 600 ? "warning" : "critical";
-      return h("span", { class: "live-watch" }, h("span", { class: "dot " + c, "aria-hidden": "true" }), h("span", { text: label + ": " + since(sec) }));
-    };
-    const watches = h("div", { class: "live-row" },
-      watch("Live watch", w.live && w.live.at), watch("Chain watch", w.chain && w.chain.at),
-      watch("Level watch", w.level && w.level.at), watch("Auto-submitter", w.autosubmit && w.autosubmit.at));
-    const sp = SIG.spec || {}, si = SIG.site || {}, ch = SIG.chain || {};
-    const kv = (k, v) => h("span", null, h("span", { class: "k", text: k }), h("span", { class: "v", text: v }));
-    const burst = (ch.bursts || []).slice(-1)[0];
-    const facts = h("div", { class: "live-row" },
-      kv("Spec on GitHub", "level " + (sp.level ?? "?") + " · version " + (sp.version ?? "?") + " · " + (sp.n_tasks ?? "?") + " tasks · " + (sp.architecture || "?")),
-      kv("Validator site", "level " + (si.level ?? "?") + " · queue " + (si.queue ?? "?")),
-      kv("Chain head", "≈ " + fmtInt(ch.head)),
-      kv("Code pushed", SIG.pushed ? ago(SIG.pushed.at) + (SIG.pushed.block ? " (block " + fmtInt(SIG.pushed.block) + ")" : "") : "not yet"),
-      burst ? kv("Last burst of entries", "block " + fmtInt(burst.first_block) + (burst.round ? " (a round block)" : "")) : null);
-    const list = (SIG.alerts || []).slice(-10).reverse();
-    const fresh = list.length && Date.now() - Date.parse(list[0].at) < 6 * 3600 * 1000;
-    const alerts = h("details", { class: "live-alerts", open: (UI.liveOpen !== undefined ? UI.liveOpen : fresh) || null,
-      ontoggle: (ev) => { UI.liveOpen = ev.target.open; } },
-      h("summary", { text: "Alerts: " + (SIG.alerts || []).length + (list.length ? ", newest " + ago(list[0].at) : "") }),
-      list.map((x) => h("div", { class: "live-alert" }, h("span", { class: "meta", text: localTime(x.at) + " · " }), h("span", { text: x.text }))));
-    const foot = h("div", { class: "live-row meta", text: "Signals published " + ago(SIG.generated)
-      + (SIG_SRC === "delayed" ? " · read from the delayed copy (up to 5 min old)" : " · read every " + Math.round(CONF.signalsMs / 1000) + " s")
-      + (SIG_ERR ? " · last read failed: " + SIG_ERR : "") });
-    box.replaceChildren(status, watches, facts, alerts, foot);
+  function bestPoint() {
+    const sc = (STATE && STATE.scores) || [];
+    return sc.length ? sc[sc.length - 1] : null;
   }
 
-  // ------------------------------------------------------------------------------------------ lock
+  // ------------------------------------------------------------------------------------------ header and KPIs
+  function renderStatus() {
+    const box = $("#status");
+    if (!box) return;
+    if (!RAW) { box.replaceChildren(); return; }
+    const t = SIG ? Date.parse(SIG.generated) : NaN, age = (Date.now() - t) / 1000;
+    const cls = !SIG ? "down" : age < 240 && SIG_SRC === "live" ? "live" : age < 900 ? "late" : "down";
+    const txt = !SIG ? "live feed: " + (SIG_ERR || "loading…") : "live feed " + ago(SIG.generated) + (SIG_SRC === "live" ? "" : " (delayed copy)");
+    box.replaceChildren(h("span", { class: "dot " + cls, "aria-hidden": "true" }), txt);
+    $("#updated").textContent = STATE ? "lab state " + ago(STATE.generated) : "";
+  }
+  function kpi(label, value, detail, accent) {
+    return h("div", { class: "kpi" + (accent ? " accent" : "") }, h("div", { class: "k", text: label }), h("div", { class: "v", text: value }), h("div", { class: "d", text: detail || "" }));
+  }
+  function renderKpis() {
+    const bp = STATE.binpick || {}, v = V2(), top = v.top || [], best = bestPoint(), pl = STATE.pipeline || {}, en = pl.entry || {};
+    const ends = (v.round && v.round.ends) || bp.round_ends;
+    const third = top[2], lead = top[0];
+    return h("div", { class: "kpis" },
+      kpi("Our best version", best ? pct1(best.solved / best.of) : "—", best ? (pl.best || best.name) + " · " + best.solved + " of " + best.of + " fresh scenes" : "no measurement yet", true),
+      kpi("Goal", isNum(bp.goal) ? pct1(bp.goal) : "—", "every scene solved"),
+      kpi("Leader", lead ? score3(lead[1]) : "—", lead ? owner(lead[4]) + " · UID " + lead[0] : "board not read yet"),
+      kpi("Third place", third ? score3(third[1]) : "—", third ? "a place needs more than this" : ""),
+      kpi("Round " + ((v.round && v.round.n) || 1) + " ends in", until(ends), ends ? when(ends) : ""),
+      kpi("Our entry", en.uid ? "UID " + en.uid : "—", en.fee_paid ? "fee paid" : "registered · not entered · fee " + (en.fee_tao || 0.1) + " TAO"));
+  }
+
+  // ------------------------------------------------------------------------------------------ overview
+  function renderPipeline() {
+    const pl = STATE.pipeline || {}, stages = pl.stages || [];
+    const idx = stages.findIndex((x) => x.id === pl.stage);
+    const running = ((STATE.binpick || {}).methods || []).filter((m) => methodState(m) === "running");
+    return panel("Pipeline: cycle " + (pl.cycle || "—"), "Best version " + (pl.best || "—") + ". One method at a time: kept only if it gains at least twice its noise on 6,000 scenes.",
+      h("ol", { class: "stages" }, stages.map((st, i) => h("li", { class: "stage" + (i < idx ? " done" : i === idx ? " now" : ""), title: st.what || "" },
+        h("div", { class: "n", text: st.name }), h("div", { class: "w", text: st.who || "" })))),
+      h("div", { class: "note", text: pl.note || "" }),
+      running.length ? h("div", { class: "note" }, "Running now: ", running.map((m) => m.id).join(", ")) : null);
+  }
+  function renderMachines() {
+    const ms = (V2().machines || {}), list = ms.machines || [];
+    if (!list.length) return panel("Computers", "Three 32-core machines", h("div", { class: "empty", text: "No machine status yet." }));
+    return panel("Computers", "Three 32-core machines · checked " + ago(ms.at),
+      h("div", { class: "grid three" }, list.map((m) => {
+        if (!m.reachable) return h("div", { class: "machine" }, h("div", { class: "name", text: m.name }), h("div", { class: "role", text: m.role || "" }), chip("invalid", "Not reachable"));
+        const busy = Math.round(100 * (m.busy || 0));
+        return h("div", { class: "machine" },
+          h("div", { class: "name" }, m.name, " ", busy >= 15 ? chip("running", "Working") : chip("neutral", "Idle")),
+          h("div", { class: "role", text: m.role || "" }),
+          h("div", { class: "meter", role: "img", "aria-label": "Load " + busy + " percent" }, h("span", { style: null, "data-w": busy })),
+          h("div", { class: "row" }, h("span", { text: "load " + busy + "% of " + m.cores + " cores" }), h("span", { text: (m.mem_used_gb || 0) + " / " + Math.round(m.mem_total_gb || 0) + " GB" })),
+          h("div", { class: "doing", text: m.doing || "idle" }));
+      })));
+  }
+  function applyMeters(root) { root.querySelectorAll(".meter > span").forEach((e) => { e.style.width = Math.max(1, Math.min(100, +e.getAttribute("data-w") || 0)) + "%"; }); }
+
+  function scoreChart() {
+    const pts = ((STATE && STATE.scores) || []).filter((p) => isNum(p.solved) && isNum(p.of) && p.of > 0);
+    if (pts.length < 2) return h("div", { class: "empty", text: "Not enough measurements for a chart yet." });
+    const v = V2(), top = v.top || [], third = top[2] ? top[2][1] : (STATE.binpick || {}).rank_line;
+    const W = 760, H = 270, L = 44, R = 118, T = 22, B = 44;
+    const vals = pts.map((p) => 100 * p.solved / p.of);
+    const lo = Math.min(Math.floor(Math.min.apply(null, vals)) - 1, 93), hi = 100;
+    const x = (i) => L + (pts.length === 1 ? 0 : (i * (W - L - R)) / (pts.length - 1));
+    const y = (val) => T + ((hi - val) * (H - T - B)) / (hi - lo);
+    const svg = s("svg", { viewBox: "0 0 " + W + " " + H, role: "img", "aria-label": "Share of fresh scenes solved by each measured version" });
+    for (let g = Math.ceil(lo); g <= hi; g += (hi - lo > 5 ? 2 : 1)) {
+      svg.append(s("line", { class: "gridline", x1: L, x2: W - R, y1: y(g), y2: y(g) }));
+      svg.append(s("text", { x: L - 6, y: y(g) + 4, "text-anchor": "end" }, g + "%"));
+    }
+    const refs = [[100, "goal 100%"]];
+    if (isNum(third) && third < 1) refs.push([100 * third, "third place " + (100 * third).toFixed(1) + "%"]);
+    refs.forEach((r, i) => {
+      svg.append(s("line", { class: "ref", x1: L, x2: W - R, y1: y(r[0]), y2: y(r[0]) }));
+      svg.append(s("text", { x: W - R + 6, y: y(r[0]) + (i ? 13 : -3) }, r[1]));
+    });
+    svg.append(s("path", { class: "line", d: pts.map((p, i) => (i ? "L" : "M") + x(i).toFixed(1) + " " + y(vals[i]).toFixed(1)).join(" ") }));
+    const bestI = vals.indexOf(Math.max.apply(null, vals)), labelAt = new Set([0, bestI, pts.length - 1]);
+    const every = pts.length > 14 ? 2 : 1;
+    const box = h("div", { class: "chartbox" }), tip = h("div", { class: "tip", hidden: true });
+    pts.forEach((p, i) => {
+      svg.append(s("circle", { class: "pt", cx: x(i), cy: y(vals[i]), r: 4.5 }));
+      if (labelAt.has(i)) svg.append(s("text", { class: "lab", x: x(i), y: y(vals[i]) - 10, "text-anchor": i === 0 ? "start" : i === pts.length - 1 ? "end" : "middle" }, vals[i].toFixed(1) + "%"));
+      if (i % every === 0 || i === pts.length - 1) svg.append(s("text", { x: x(i), y: H - B + 16, "text-anchor": "middle" }, String(p.name)));
+      const hit = s("rect", { class: "hit", x: x(i) - 16, y: T, width: 32, height: H - T - B, tabindex: 0, "aria-label": p.name + ": " + p.solved + " of " + p.of });
+      const show = () => {
+        tip.replaceChildren(h("div", null, h("strong", { text: String(p.name) })), h("div", { text: p.solved + " of " + p.of + " solved (" + vals[i].toFixed(1) + "%)" }),
+          h("div", { class: "meta", text: "fresh set " + (p.set || "—") + (isNum(p.paired) ? " · the version before: " + p.paired : "") }));
+        tip.hidden = false;
+        const bw = box.clientWidth || W, px = (x(i) / W) * bw;
+        tip.style.left = Math.max(0, Math.min(bw - 240, px + 10)) + "px";
+        tip.style.top = Math.max(0, (y(vals[i]) / H) * (box.clientHeight || H) - 10) + "px";
+      };
+      hit.addEventListener("mouseenter", show); hit.addEventListener("focus", show);
+      hit.addEventListener("mouseleave", () => { tip.hidden = true; }); hit.addEventListener("blur", () => { tip.hidden = true; });
+      svg.append(hit);
+    });
+    svg.append(s("text", { x: L, y: H - 6 }, "versions in the order they were measured; each on a fresh set of 1,000 scenes never used to choose"));
+    box.append(h("div", { class: "chart" }, svg), tip);
+    return box;
+  }
+  function alertItem(a) {
+    const key = /KEY|BOARD|ACTIVE|PUBLIC|MAINNET/.test(a.text || "");
+    return h("li", { class: key ? "key" : null }, h("span", { class: "t", text: when(a.at) }), String(a.text || "").slice(0, 420));
+  }
+  function renderOverview() {
+    const v = V2(), alerts = (v.alerts || (SIG && SIG.alerts) || []).slice().reverse();
+    const team = ((v.discord || {}).team || []).slice().reverse();
+    return [
+      h("div", { class: "grid two" }, renderPipeline(),
+        panel("Latest from the organisers", "Their messages in the SN58 channel",
+          team.length ? h("ul", { class: "feed" }, team.slice(0, 2).map((m) => h("li", { class: "key" }, h("span", { class: "t", text: m.at }), h("span", { class: "who", text: m.who }), m.text))) : h("div", { class: "empty", text: "Nothing yet." }))),
+      renderMachines(),
+      h("div", { class: "grid two" },
+        panel("Score progress", "Share of fresh scenes solved by each measured version", scoreChart()),
+        panel("Latest alerts", "From the watches (site, code, chain, Discord)",
+          alerts.length ? h("ul", { class: "feed" }, alerts.slice(0, 4).map((a) => alertItem({ at: a.at, text: String(a.text || "").slice(0, 230) + (String(a.text || "").length > 230 ? "…" : "") }))) : h("div", { class: "empty", text: "No alerts." }))),
+    ];
+  }
+
+  // ------------------------------------------------------------------------------------------ methods
+  function renderMethods() {
+    const ms = ((STATE.binpick || {}).methods || []).slice().reverse();
+    const counts = {};
+    ms.forEach((m) => { const st = methodState(m); counts[st] = (counts[st] || 0) + 1; });
+    const order = ["all", "running", "kept", "banned", "invalid", "queued", "research", "tested", "replaced"];
+    const filters = h("div", { class: "filters", role: "group", "aria-label": "Filter by status" }, order.filter((k) => k === "all" || counts[k]).map((k) =>
+      h("button", { class: "chip", type: "button", "aria-pressed": UI.filter === k ? "true" : "false", onclick: () => { UI.filter = k; render(); } },
+        k === "all" ? "All " + ms.length : (CHIPS[k] ? CHIPS[k][2] : k) + " " + counts[k])));
+    const rows = [];
+    ms.filter((m) => UI.filter === "all" || methodState(m) === UI.filter).forEach((m) => {
+      const st = methodState(m), six = sixSets(m), open = !!UI.open[m.id];
+      const res = six ? h("span", null, six.before + " → " + six.after + "  (", h("span", { class: "gain", text: "+" + six.gained }), " ", h("span", { class: "loss", text: "−" + six.lost }), ", bar " + six.bar + ")") : (m.result ? String(m.result).slice(0, 90) + (String(m.result).length > 90 ? "…" : "") : "—");
+      rows.push(h("tr", { class: "click", tabindex: 0, onclick: () => { UI.open[m.id] = !open; render(); }, onkeydown: (ev) => { if (ev.key === "Enter") { UI.open[m.id] = !open; render(); } } },
+        h("td", { class: "mono", text: m.id }), h("td", { class: "num", text: m.cycle || "—" }), h("td", null, chip(st)), h("td", { text: m.title || "" }), h("td", null, res)));
+      if (open) {
+        const dl = h("dl", { class: "kv" });
+        [["Aimed at", m.targets], ["Session A's test", m.a_test], ["Result", m.result], ["Session B's note", m.measured && m.measured.note], ["Measured", m.measured && m.measured.measured_at ? when(m.measured.measured_at) + " against " + (m.measured.base || "the best version") : null]]
+          .forEach((kv) => { if (kv[1]) dl.append(h("dt", { text: kv[0] }), h("dd", { text: String(kv[1]) })); });
+        rows.push(h("tr", { class: "detail" }, h("td", { colspan: 5 }, dl)));
+      }
+    });
+    return [panel("Methods, newest first", "One method at a time against the best version on 6,000 scenes; kept only if gained − lost is at least 2·√(gained + lost). Click a row for the details.", filters,
+      table(["Method", { t: "Cycle", num: true }, "Status", "What it is", "On 6,000 scenes: before → after (gained, lost, bar)"], rows))];
+  }
+
+  // ------------------------------------------------------------------------------------------ research
+  function renderResearch() {
+    const r = STATE.research || {}, items = r.items || [];
+    return [panel("Research findings, newest first", r.note || "", items.length ? items.map((it) => h("div", { class: "finding" },
+      h("div", { class: "head" }, h("span", { class: "mono meta", text: it.id }), h("span", { class: "title", text: it.title }), chip(it.status), h("span", { class: "meta", text: it.date || "" }),
+        (it.methods || []).length ? h("span", { class: "meta", text: "→ " + it.methods.join(", ") }) : null),
+      h("p", { text: it.finding || "" }))) : h("div", { class: "empty", text: "No findings recorded yet." }))];
+  }
+
+  // ------------------------------------------------------------------------------------------ monitoring
+  function renderMonitoring() {
+    const v = V2(), top = v.top || [], counts = v.counts || {}, rules = v.rules || {}, slot = v.slot || {}, vault = v.vault || {}, en = (STATE.pipeline || {}).entry || {};
+    const best = bestPoint();
+    const boardRows = top.map((t, i) => [String(i + 1), owner(t[4]), h("td", { class: "num", text: score3(t[1]) }), h("td", { class: "num", text: fmtInt(t[2]) }), h("td", { class: "num", text: fmtInt(t[3]) }), "UID " + t[0]]);
+    if (best) boardRows.push(["—", "ours (" + (((STATE.pipeline || {}).best) || best.name) + ", measured here, not entered)", h("td", { class: "num", text: score3(best.solved / best.of) }), h("td", { class: "num", text: fmtInt(best.of) }), h("td", { class: "num", text: "—" }), en.uid ? "UID " + en.uid : ""]);
+    const shares = (rules.rank_shares || []).map((x) => Math.round(100 * x) + "%").join(" / ");
+    const kv = (pairs) => { const dl = h("dl", { class: "kv" }); pairs.forEach((p) => { if (p[1] !== null && p[1] !== undefined && p[1] !== "") dl.append(h("dt", { text: p[0] }), h("dd", { text: String(p[1]) })); }); return dl; };
+    const disc = v.discord || {}, team = (disc.team || []).slice().reverse(), other = (disc.other || []).slice().reverse();
+    const alerts = (v.alerts || (SIG && SIG.alerts) || []).slice().reverse();
+    return [
+      h("div", { class: "grid two" },
+        panel("The board", "Best entries on the organisers' site" + (v.api_at ? " · read " + ago(v.api_at) : ""), boardRows.length ? table(["#", "Entry", { t: "Score", num: true }, { t: "Scenes", num: true }, { t: "Commit block", num: true }, ""], boardRows) : h("div", { class: "empty", text: "Board not read yet." }),
+          h("h3", { text: "Round and entries" }),
+          kv([["Round", v.round ? v.round.n + " · ends " + when(v.round.ends) + " (in " + until(v.round.ends) + ")" : null], ["Entries scored", counts.scored], ["Being played now", counts.phase1], ["Invalid / unpaid", (counts.invalid || 0) + " / " + (counts.unpaid || 0)], ["Scenes per entry", rules.scenes ? rules.scenes + ", then " + rules.phase2_scenes + " re-run on the organisers' side" : null], ["Pay split of the top three", shares], ["Next round's skill (bin-picking-v2)", v.skills && "bin-picking-v2" in v.skills ? (v.skills["bin-picking-v2"] ? "ACTIVE" : "listed, switched off") : null]])),
+        panel("Fee and our slot", "What an entry needs",
+          kv([["Our UID", slot.uid], ["Registered at block", fmtInt(slot.registered_block)], ["Entry fee", ((v.fee && v.fee.tao) || en.fee_tao || 0.1) + " TAO per entry"], ["Fee paid", en.fee_paid ? "yes" : "not yet"], ["Image pushed", en.image_pushed ? "yes" : "not yet"], ["Candidate", en.candidate], ["Fee vault holds", isNum(vault.tao) ? vault.tao + " TAO (" + Math.round(vault.tao / 0.1) + " fees)" : null], ["Chain head", fmtInt(slot.head)]]),
+          en.deadline_note ? h("p", { class: "note", text: en.deadline_note }) : null,
+          h("h3", { text: "Newest entries on chain" }),
+          h("ul", { class: "feed" }, (v.chain_log || []).slice().reverse().slice(0, 8).map((ln) => h("li", { text: String(ln).replace(/ hotkey .*$/, "") }))))),
+      h("div", { class: "grid two" },
+        panel("Alerts", "Everything the watches raised, newest first", alerts.length ? h("ul", { class: "feed" }, alerts.slice(0, 30).map(alertItem)) : h("div", { class: "empty", text: "No alerts." })),
+        panel("Discord: SN58 channel", "The organisers first, then other miners (their words, unverified)",
+          h("ul", { class: "feed" }, team.slice(0, 5).map((m) => h("li", { class: "key" }, h("span", { class: "t", text: m.at }), h("span", { class: "who", text: m.who }), m.text)),
+            other.slice(0, 8).map((m) => h("li", null, h("span", { class: "t", text: m.at }), h("span", { class: "who", text: m.who }), m.text))))),
+    ];
+  }
+
+  // ------------------------------------------------------------------------------------------ verification
+  function renderVerification() {
+    const vf = STATE.verification;
+    if (!vf) return [panel("Verification", "", h("div", { class: "empty", text: "No final record yet." }))];
+    const o = vf.ours || {}, lim = vf.limits || {}, dl = vf.deadlines || {}, img = vf.image || {};
+    const eq = (x) => (x && isNum(x.equal) ? x.equal + " of " + (x.paired || x.compared) : "—");
+    const okEq = (x) => !!x && x.equal === (x.paired || x.compared);
+    const det = (vf.determinism_B || {}).determinism || {};
+    const mark = (ok, text) => h("span", { class: ok ? "pass" : "fail", text: text });
+    const rows = [
+      ["Two runs give the same actions", "all equal", mark(okEq(det), eq(det))],
+      ["Live path against re-run path", "all equal", mark(okEq(vf.phase1_vs_phase2_hashes_A_C), eq(vf.phase1_vs_phase2_hashes_A_C))],
+      ["1 CPU against 4 CPUs", "all equal", mark(okEq(vf.cpus1_vs_cpus4_hashes), eq(vf.cpus1_vs_cpus4_hashes))],
+      ["Machine against machine", "all equal", mark(okEq(vf.worker_vs_this_machine_hashes), eq(vf.worker_vs_this_machine_hashes))],
+      ["First answer", "10 s (our margin 7 s)", mark(lim.first_act_max_s <= 10, (lim.first_act_max_s || 0).toFixed(2) + " s at most")],
+      ["Later answers", "2 s (our margin 1.3 s)", mark(lim.later_act_max_s <= 2, (lim.later_act_max_s || 0).toFixed(2) + " s at most")],
+      ["Late or timed-out steps", "none", mark((lim.late_acts || 0) === 0 && (lim.step_timeouts || 0) === 0, (lim.late_acts || 0) + " late, " + (lim.step_timeouts || 0) + " timed out")],
+      ["Whole scene, re-run on 4 CPUs", "45 s (our margin 15 s)", mark(lim.phase2_cpus4_wall_max_s <= 45, (lim.phase2_cpus4_wall_max_s || 0).toFixed(1) + " s at most")],
+      ["Whole scene on 1 CPU (our own safety check)", "our margin 32 s", mark(lim.phase2_cpus1_wall_max_s <= 45, (lim.phase2_cpus1_wall_max_s || 0).toFixed(1) + " s at most")],
+      ["Memory", "8 GB", mark((lim.peak_rss_mb || 0) < 8000, ((lim.peak_rss_mb || 0) / 1000).toFixed(2) + " GB at peak")],
+      ["Rehearsed successes confirmed by the harness", "all", mark(o.verdict_check && o.verdict_check.mismatch_count === 0, o.verdict_check ? o.verdict_check.plan_success_harness_success + " of " + o.verdict_check.plan_success : "—")],
+    ];
+    const cls = o.by_class || {}, outc = o.outcomes || {}, ways = vf.ways_of_success || {};
+    return [
+      panel("Verification of the best version", "Cycle " + vf.cycle + " · image " + (img.tag || "—") + " · final set " + ((vf.set || {}).seed || "—") + ": " + (o.successes || "—") + " of " + ((vf.set || {}).scenes || "—") + " solved" + (o.ci95 ? " (95% " + o.ci95.map((x) => (100 * x).toFixed(1)).join("–") + "%)" : ""),
+        table(["Check", "Limit", "Measured"], rows)),
+      h("div", { class: "grid two" },
+        panel("By kind of scene", "Hardest class that applies", table(["Class", { t: "Solved", num: true }, { t: "Of", num: true }, { t: "Share", num: true }], Object.keys(cls).map((k) => [k, h("td", { class: "num", text: cls[k][0] }), h("td", { class: "num", text: cls[k][1] }), h("td", { class: "num", text: pct1(cls[k][0] / cls[k][1]) })]))),
+        panel("How scenes ended, and which pinch won", "", table(["Outcome", { t: "Scenes", num: true }], Object.keys(outc).map((k) => [k.replace(/_/g, " "), h("td", { class: "num", text: outc[k] })])),
+          h("h3", { text: "Successes by family" }), table(["Family", { t: "Scenes", num: true }], Object.keys(ways).map((k) => [k.replace(/_/g, " "), h("td", { class: "num", text: ways[k] })])))),
+    ];
+  }
+
+  // ------------------------------------------------------------------------------------------ round 2
+  function renderRound2() {
+    const r = STATE.round2;
+    if (!r) return [panel("Round 2", "", h("div", { class: "empty", text: "No plan recorded yet." }))];
+    const a = r.announcement || {}, v = V2();
+    const v2on = v.skills && v.skills["bin-picking-v2"];
+    return [
+      panel("Round 2: what the organisers said", (a.who || "") + " · " + when(a.at), h("p", { class: "note", text: a.text || "" }),
+        h("p", null, chip(v2on ? "running" : "queued", v2on ? "bin-picking-v2 is ACTIVE" : "bin-picking-v2 is listed, not yet active")),
+        h("ul", { class: "feed" }, (r.known || []).map((k) => h("li", { text: k })))),
+      h("div", { class: "grid two" },
+        panel("Day-one plan", "In order; nothing here waits for us except the organisers' release", table(["Step", "What", "State"], (r.plan || []).map((p) => [p.step, p.detail, chip(/ready/.test(p.state || "") ? "ready" : /waiting/.test(p.state || "") ? "queued" : "planned", p.state)]))),
+        panel("Lessons from round 1", "What we change", (r.lessons || []).map((l) => h("div", { class: "finding" }, h("div", { class: "title", text: l.title }), h("p", { text: l.text }))))),
+      panel("What we carry over", "", h("ul", { class: "feed" }, (r.assets || []).map((k) => h("li", { text: k })))),
+    ];
+  }
+
+  // ------------------------------------------------------------------------------------------ render
+  const TABS = [["overview", "Overview", renderOverview], ["methods", "Methods", renderMethods], ["research", "Research", renderResearch],
+    ["monitoring", "Monitoring", renderMonitoring], ["verification", "Verification", renderVerification], ["round2", "Round 2", renderRound2]];
+  function render() {
+    if (!STATE) return;
+    $("#lock-btn").hidden = false;
+    const tab = TABS.find((t) => t[0] === UI.tab) || TABS[0];
+    const nm = ((STATE.binpick || {}).methods || []).length, nr = ((STATE.research || {}).items || []).length;
+    const nav = h("nav", { class: "tabs", role: "tablist" }, TABS.map((t) => h("button", { type: "button", role: "tab", "aria-selected": t[0] === tab[0] ? "true" : "false",
+      onclick: () => { UI.tab = t[0]; store.set("attune.v2.tab", t[0]); render(); } }, t[1], t[0] === "methods" ? h("span", { class: "count", text: nm }) : t[0] === "research" ? h("span", { class: "count", text: nr }) : null)));
+    let body;
+    try { body = tab[2](); } catch (e) { body = [panel("This view failed to draw", String(e && e.message ? e.message : e))]; }
+    const app = $("#app");
+    app.replaceChildren(renderKpis(), nav, h("div", { role: "tabpanel" }, body));
+    applyMeters(app);
+    renderStatus();
+    $("#foot").textContent = "Decrypted in your browser. The lab state updates on every publish; the live feed (board, chain, Discord, computers) every minute.";
+  }
   function renderLock(msg) {
     $("#lock-btn").hidden = true;
     const input = h("input", { type: "password", autocomplete: "current-password", placeholder: "Passphrase", "aria-label": "Passphrase" });
     const remember = h("input", { type: "checkbox", checked: true });
     const err = h("div", { class: "err", role: "alert", text: msg || "" });
     const btn = h("button", { class: "btn primary", type: "submit", text: "Unlock" });
-    const form = h("form", {
-      class: "lock",
-      onsubmit: async (ev) => {
-        ev.preventDefault();
-        if (!input.value) return;
-        btn.disabled = true;
-        err.textContent = "Deriving the key…";
-        try {
-          const raw = await deriveRaw(input.value, BLOB.salt, BLOB.iter);
-          STATE = await decryptBlob(BLOB, raw);
-          RAW = raw;
-          if (remember.checked) store.set(keyName(), b64e(raw));
-          render();
-        } catch (e) {
-          err.textContent = "That passphrase does not open this data. Try again.";
-          btn.disabled = false;
-          input.select();
-        }
-      },
-    },
-      h("h1", { text: "Unlock the dashboard" }),
-      h("p", { text: "The pipeline state is encrypted. Enter the passphrase (DASHBOARD_PASSPHRASE in your .env)." }),
+    const form = h("form", { class: "lock", onsubmit: async (ev) => {
+      ev.preventDefault();
+      if (!input.value) return;
+      btn.disabled = true; err.textContent = "Deriving the key…";
+      try {
+        const raw = await deriveRaw(input.value, BLOB.salt, BLOB.iter);
+        STATE = await decryptBlob(BLOB, raw); RAW = raw;
+        if (remember.checked) store.set(keyName(), b64e(raw));
+        render(); refreshSignals();
+      } catch (e) { err.textContent = "That passphrase does not open this data. Try again."; btn.disabled = false; input.select(); }
+    } }, h("h1", { text: "Unlock the dashboard" }), h("p", { text: "The data is encrypted. Enter the passphrase (DASHBOARD_PASSPHRASE in your .env)." }),
       input, h("label", null, remember, "Remember on this device"), btn, err);
     $("#app").replaceChildren(form);
+    renderStatus();
     input.focus();
   }
 
-  // ------------------------------------------------------------------------------------------ derived data
-  function verdictRows() {
-    return (STATE.experiments || [])
-      .filter((e) => e.verdict && isNum(e.verdict.delta_points))
-      .map((e) => ({
-        id: e.id, method: e.method, cls: e.verdict.class, delta: e.verdict.delta_points, ci: e.verdict.ci,
-        pwin: e.verdict.ticket && isNum(e.verdict.ticket.p_win) ? e.verdict.ticket.p_win : e.verdict.p_win_duel,
-        ticket: e.verdict.ticket || null, n: e.verdict.n_paired, tier: e.tier, at: e.updated || e.created,
-        current: e.verdict.king_is_current !== false, v: e.verdict, e,
-      }))
-      .sort((a, b) => String(a.at).localeCompare(String(b.at)) || a.id.localeCompare(b.id));
+  // ------------------------------------------------------------------------------------------ refresh
+  async function refreshState() {
+    if (stateBusy || !RAW) return;
+    stateBusy = true;
+    try {
+      const b = await getJSON("state.enc.json");
+      if (!BLOB || b.ct !== BLOB.ct) {
+        if (BLOB && b.salt !== BLOB.salt) { BLOB = b; STATE = null; RAW = null; renderLock("The key changed; enter the passphrase again."); return; }
+        STATE = await decryptBlob(b, RAW); BLOB = b; render();
+      } else renderStatus();
+    } catch (e) { $("#updated").textContent = "refresh failed: " + e.message; }
+    finally { stateBusy = false; }
   }
-  function bestRow(rows) {
-    const ok = rows.filter((r) => r.current && r.cls !== "INVALID");
-    if (!ok.length) return null;
-    return ok.reduce((a, b) => (b.delta > a.delta ? b : a));
-  }
-  const methodTitle = (id) => { const m = (STATE.methods || []).find((x) => x.id === id); return m ? m.title : ""; };
-
-  // ------------------------------------------------------------------------------------------ render
-  function updatedLabel() {
-    $("#updated").textContent = STATE ? "Data " + ago(STATE.generated) + (STATE.lab_head ? " · lab " + STATE.lab_head : "") : "";
-  }
-  function render() {
-    $("#lock-btn").hidden = false;
-    if (!SIG && !sigBusy) refreshSignals();
-    updatedLabel();
-    renderCrown();
-    const app = $("#app");
-    const scrollY = window.scrollY;
-    const parts = [];
-    if (STATE.errors && STATE.errors.length) parts.push(h("div", { class: "warnbar", text: "Ledger errors: " + STATE.errors.join(" · ") }));
-    parts.push(kpis(), signalsPanel(), tabsNav(), tabBody());
-    app.replaceChildren.apply(app, parts);
-    $("#foot").textContent = "Encrypted state from aiZKP/attune-lab · refreshes every minute · raw CDN may lag ~5 min.";
-    drawCharts();
-    window.scrollTo(0, scrollY);
-  }
-
-  function tile(label, value, sub, opts) {
-    opts = opts || {};
-    return h("div", { class: "tile" },
-      h("div", { class: "label", text: label }),
-      h("div", { class: "value" + (opts.hero ? " hero" : "") + (opts.small ? " small" : "") }, value),
-      sub ? h("div", { class: "sub" }, sub) : null);
-  }
-  // A fixed, hourly-billed pod budget (config.budget): what is left is a function of the clock alone.
-  function budgetNow() {
-    const b = STATE.config && STATE.config.budget;
-    if (!b || !isNum(b.usd_at_rent) || !isNum(b.usd_per_hour) || b.usd_per_hour <= 0) return null;
-    const t0 = Date.parse(b.rented_at);
-    if (isNaN(t0)) return null;
-    const usd = Math.max(0, b.usd_at_rent - Math.max(0, (Date.now() - t0) / 3.6e6) * b.usd_per_hour);
-    const end = Date.parse(b.sprint_end);
-    return { usd, hours: usd / b.usd_per_hour, rate: b.usd_per_hour,
-      toEnd: isNaN(end) ? null : Math.max(0, (end - Date.now()) / 3.6e6) };
-  }
-  const tao = (x) => (isNum(x) ? (x >= 0 ? "+" : "−") + Math.abs(x).toFixed(1) + " TAO" : "—");
-  function kpis() {
-    const rows = verdictRows();
-    const best = bestRow(rows);
-    const comp = STATE.competition || {};
-    const ms = STATE.methods || [];
-    const count = (st) => ms.filter((m) => st.indexOf(m.status) >= 0).length;
-    const queue = ((STATE.queue || {}).items || []).map((q) => q.id);
-    const gpu = STATE.runtime || {};
-    const bud = budgetNow();
-    const margin = (STATE.config && STATE.config.verdict && STATE.config.verdict.margin_points) || 3;
-    const tk = best && best.ticket;
-    const gpuUsed = (isNum(gpu.gpu_hours_used_total) ? gpu.gpu_hours_used_total.toFixed(1) + " GPU-h used" : "") +
-      ((gpu.jobs || []).length ? " · " + gpu.jobs.length + " job(s)" : "") + (gpu.updated ? " · " + ago(gpu.updated) : "");
-    return h("section", { class: "kpis", "aria-label": "Key numbers" },
-      tile("Best Δ vs the current king", best ? pts(tk && isNum(tk.delta_points) ? tk.delta_points : best.delta) + " pts" : "—",
-        best ? [best.id + " · " + best.method + " · " + (tk ? tk.units + " units (" + tk.basis + ") · " : ""), chip(best.cls.toLowerCase())]
-          : "No verdict yet against the current king",
-        { hero: true }),
-      tile("Win chance of the best", best ? pct(best.pwin) : "—",
-        tk && isNum(tk.ev_tao)
-          ? "One entry is worth " + tao(tk.ev_tao) + " (crown ≈ " + tk.crown_value_tao + " TAO, fee " + tk.burn_tao + ")"
-          : "Simulated 16×15 duel, crown at +" + margin + " pts"),
-      tile("Reigning king", (comp.king && comp.king.repo) || "—", "Level " + (comp.level !== undefined ? comp.level : "—") + " · seen " + ago(comp.king_since && comp.king_since.first_seen), { small: true }),
-      tile("Pipeline", count(["running"]) + " running · " + queue.length + " queued",
-        queue.length ? "Next: " + queue.slice(0, 3).join(", ") : "Queue empty", { small: true }),
-      bud
-        ? tile("Pod budget left", h("span", null, "$" + bud.usd.toFixed(0) + " · " + bud.hours.toFixed(1) + " h ", chip(gpu.box || "off")),
-            "$" + bud.rate.toFixed(2) + "/h, busy or idle" + (bud.toEnd !== null ? " · sprint ends in " + bud.toEnd.toFixed(1) + " h" : "") +
-            ((gpu.jobs || []).length ? " · " + gpu.jobs.length + " job(s)" : ""), { small: true })
-        : tile("GPU box", h("span", null, chip(gpu.box || "off")), gpuUsed),
-    );
-  }
-
-  function issueUrl(type, arg, text, body) {
-    const title = "SIGNAL " + type + (arg ? " " + arg : "") + (text ? ": " + text : "");
-    const u = new URL("https://github.com/" + CONF.owner + "/" + CONF.labRepo + "/issues/new");
-    u.searchParams.set("labels", "signal");
-    u.searchParams.set("title", title);
-    u.searchParams.set("body", body || "");
-    return u.toString();
-  }
-  function sigBtn(label, type, arg, text, body, primary) {
-    return h("a", { class: "btn small" + (primary ? " primary" : ""), href: issueUrl(type, arg, text, body), target: "_blank", rel: "noopener noreferrer", text: label });
-  }
-  function signalsPanel() {
-    const cands = (STATE.candidates || []).slice().sort((a, b) => (a.status === "submit-ready" ? -1 : 0) - (b.status === "submit-ready" ? -1 : 0));
-    const sel = h("select", { "aria-label": "Candidate" });
-    if (!cands.length) sel.append(h("option", { value: "", text: "no candidates yet" }));
-    cands.forEach((c) => sel.append(h("option", { value: c.id, text: c.id + " · " + (c.status || "") })));
-    const approve = h("a", { class: "btn small primary", target: "_blank", rel: "noopener noreferrer", text: "Approve" });
-    const reject = h("a", { class: "btn small", target: "_blank", rel: "noopener noreferrer", text: "Reject" });
-    const sync = () => {
-      const id = sel.value;
-      if (!id) { approve.removeAttribute("href"); reject.removeAttribute("href"); approve.setAttribute("aria-disabled", "true"); return; }
-      approve.removeAttribute("aria-disabled");
-      approve.setAttribute("href", issueUrl("APPROVE", id, "", "I approve submitting " + id + " to SN58 (finney, netuid 58).\n\nRegistered hotkey: wallet.name=<name> wallet.hotkey=<hotkey>\n"));
-      reject.setAttribute("href", issueUrl("REJECT", id, "", "Do not submit " + id + ". Reason:\n"));
-    };
-    sel.addEventListener("change", sync);
-    sync();
-    const open = (STATE.signals || []).length;
-    return h("section", { class: "panel", "aria-label": "Signals" },
-      h("h2", null, "Send a signal", h("span", { class: "hint", text: "opens a pre-filled GitHub issue; Session A or B acts on it" + (open ? " · " + open + " open" : "") })),
-      h("div", { class: "signals" },
-        sigBtn("Crown changed", "CROWN", "", "new king <owner/repo>", "What the leaderboard shows (king, time):\n"),
-        sigBtn("Queue note", "QUEUE", "", "queue status", "What the leaderboard queue shows (entries ahead, who):\n"),
-        sigBtn("Level / spec news", "LEVEL", "", "news", "What changed or was announced:\n"),
-        h("span", { class: "sep" }),
-        sigBtn("GPU is on", "GPU-ON", "", "", "The GPU box is on and reachable.\n"),
-        sigBtn("GPU is off", "GPU-OFF", "", "", "I am switching the GPU box off.\n"),
-        sigBtn("Pause B", "PAUSE", "", "", "Pause new GPU work until RESUME.\n"),
-        sigBtn("Resume B", "RESUME", "", "", "Resume work.\n"),
-        h("span", { class: "sep" }),
-        sel, approve, reject,
-        h("span", { class: "sep" }),
-        sigBtn("Note to A", "NOTE", "", "note", ""),
-        sigBtn("Method idea", "METHOD", "", "idea", "Idea, source/link, why it might work:\n"),
-      ));
-  }
-
-  // ------------------------------------------------------------------------------------------ tabs
-  const TABS = [
-    ["binpick", "Bin picking"], ["overview", "Overview"], ["methods", "Methods"], ["experiments", "Experiments"], ["candidates", "Candidates"],
-    ["bans", "Bans"], ["competition", "Competition"], ["journal", "Journal"], ["notes", "Notes"],
-  ];
-  function tabsNav() {
-    const counts = {
-      binpick: ((STATE.binpick || {}).methods || []).length,
-      methods: (STATE.methods || []).length, experiments: (STATE.experiments || []).length,
-      candidates: (STATE.candidates || []).length, bans: (STATE.bans || []).length,
-      notes: (STATE.notes || []).length + (STATE.proposals || []).length,
-    };
-    const nav = h("nav", { class: "tabs", role: "tablist" });
-    TABS.forEach(([id, label]) => {
-      nav.append(h("button", {
-        role: "tab", type: "button", "aria-selected": UI.tab === id ? "true" : "false",
-        onclick: () => { UI.tab = id; render(); },
-      }, label, counts[id] !== undefined ? h("span", { class: "count", text: String(counts[id]) }) : null));
-    });
-    return nav;
-  }
-  function tabBody() {
-    switch (UI.tab) {
-      case "binpick": return STATE.binpick ? binpickTab() : overviewTab();
-      case "methods": return methodsTab();
-      case "experiments": return experimentsTab();
-      case "candidates": return candidatesTab();
-      case "bans": return bansTab();
-      case "competition": return competitionTab();
-      case "journal": return journalTab();
-      case "notes": return notesTab();
-      default: return overviewTab();
-    }
-  }
-  function panel(title, hint, body, extra) {
-    return h("section", { class: "panel" }, h("h2", null, title, hint ? h("span", { class: "hint", text: hint }) : null, extra || null), body);
-  }
-
-  // ------------------------------------------------------------------------------------------ bin picking
-  // The bin-picking programme (ledger/competition/binpick.json, kept by Session A; Session B adds one result file per
-  // method under ledger/binpick/results/, merged at publish as method.measured). A state is an icon plus a word.
-  const BP_STATE = {
-    kept: ["good", "✓", "Kept"], banned: ["critical", "✕", "Banned"], running: ["info", "▶", "Running"],
-    queued: ["warning", "◷", "Queued"], tested: ["info", "◆", "Tested by A"], research: ["neutral", "…", "Research"],
-    proposed: ["neutral", "○", "Proposed"], waiting: ["neutral", "○", "Waiting"],
-    measured: ["info", "≈", "Measured"], replaced: ["neutral", "↷", "Replaced"],
-  };
-  function bpChip(state) {
-    const c = BP_STATE[String(state || "").toLowerCase()] || ["neutral", "•", String(state || "unknown")];
-    return h("span", { class: "chip " + c[0] }, h("span", { class: "ico", "aria-hidden": "true", text: c[1] }), c[2]);
-  }
-  const bpState = (m) => String((m.measured && m.measured.verdict) || m.state || "proposed").toLowerCase();
-  function bpResult(m) {
-    const r = m.measured;
-    if (!r) return m.result || "";
-    const parts = (r.sets || []).map((x) => x.name + ": " + x.before + " → " + x.after +
-      (isNum(x.gained) ? " (+" + x.gained + " −" + (x.lost || 0) + ")" : ""));
-    if (r.note) parts.push(r.note);
-    return parts.join(" · ");
-  }
-  function bpLevels(p) {
-    const lv = (p.levels || []).slice();
-    (p.methods || []).forEach((m) => {
-      const f = m.measured && m.measured.final;
-      if (f && isNum(f.solved)) lv.push({ name: f.name || m.id, solved: f.solved, of: f.of || 1000, set: f.set || "", note: m.title });
-    });
-    return lv;
-  }
-  function binpickTab() {
-    const p = STATE.binpick;
-    const lv = bpLevels(p), last = lv[lv.length - 1] || null;
-    const methods = p.methods || [];
-    const count = (st) => methods.filter((m) => bpState(m) === st).length;
-    const goal = isNum(p.goal) ? p.goal : 0.99;
-    const perK = (x) => Math.round(x * 1000);
-    const of = last ? (last.of || 1000) : 1000;
-    const tiles = h("div", { class: "kpis" },
-      tile("Our best measured version", last ? (last.solved / of).toFixed(3) : "—",
-        last ? last.name + " · " + last.solved + " of " + fmtInt(of) + " scenes" + (last.set ? " · set " + last.set : "") : "", { hero: true }),
-      tile("Goal", goal.toFixed(3), last ? "to remove: " + Math.max(0, perK(goal) - last.solved) + " of the " + (of - last.solved) + " failures in 1,000 scenes" : ""),
-      tile("Rank line on the board", isNum(p.rank_line) ? p.rank_line.toFixed(3) : "—", p.board_note || ""),
-      tile("Methods", count("kept") + " kept · " + count("banned") + " banned",
-        (count("running") + count("queued") + count("tested")) + " waiting or running · " + count("research") + " in research"),
-      tile("Round ends", p.round_ends ? untilText(p.round_ends) : "—", p.round_note || ""));
-    const head = ["Id", "Method", "Aims at", "Session A's test", "State", "Session B's measurement"];
-    const rows = methods.map((m) => h("tr", null,
-      h("td", { class: "mono", text: m.id }),
-      h("td", null, h("div", { text: m.title }), m.cycle ? h("div", { class: "meta", text: "cycle " + m.cycle }) : null),
-      h("td", { text: m.targets || "" }), h("td", { text: m.a_test || "" }),
-      h("td", { class: "state" }, bpChip(bpState(m))), h("td", { text: bpResult(m) })));
-    return h("div", null, tiles,
-      h("div", { class: "grid2" },
-        panel("Solved per 1,000 scenes, version by version", "each version on its own fresh set of 1,000 scenes",
-          chartBox("bplevels", { rows: lv, goal: perK(goal), rank: isNum(p.rank_line) ? perK(p.rank_line) : null })),
-        panel("What still fails", (p.failures && p.failures.note) || "",
-          chartBox("bpfail", { rows: (p.failures && p.failures.classes) || [], of: p.failures && p.failures.of }))),
-      panel("Methods, one at a time", "updated " + ago(p.updated),
-        h("div", null,
-          p.rule ? h("p", { class: "meta", text: p.rule }) : null,
-          h("div", { class: "tablewrap" }, h("table", { class: "steps" },
-            h("thead", null, h("tr", null, head.map((t) => h("th", { text: t })))), h("tbody", null, rows))))));
-  }
-
-  // ------------------------------------------------------------------------------------------ overview
-  function overviewTab() {
-    const rows = verdictRows();
-    const focus = (UI.exp && rows.find((r) => r.id === UI.exp)) || bestRow(rows) || rows[rows.length - 1] || null;
-    const queue = ((STATE.queue || {}).items || []).slice(0, 7);
-    const qList = queue.length
-      ? h("div", { class: "tablewrap" }, h("table", null,
-        h("thead", null, h("tr", null, h("th", { text: "#" }), h("th", { text: "Method" }), h("th", { text: "Title" }), h("th", { class: "num", text: "Priority" }))),
-        h("tbody", null, queue.map((q, i) => h("tr", { class: "clickable", onclick: () => { UI.tab = "methods"; UI.method = q.id; render(); } },
-          h("td", { text: String(i + 1) }), h("td", { class: "mono", text: q.id }), h("td", { text: methodTitle(q.id) }),
-          h("td", { class: "num", text: isNum(q.priority) ? q.priority.toFixed(2) : String(q.priority) }))))))
-      : h("div", { class: "empty", text: "Queue is empty." });
-    return h("div", null,
-      h("div", { class: "grid2" },
-        panel("Verdicts against the king", "Δ in points with 90% CI; the crown needs +3", chartBox("delta", { rows })),
-        panel("Per-task success" + (focus ? " — " + focus.id : ""), focus ? (focus.method + " · " + methodTitle(focus.method)) : "", chartBox("dumbbell", { v: focus && focus.v }))),
-      level5Panel(),
-      v2Panel(),
-      h("div", { class: "grid2" },
-        panel("Up next", "from ledger/queue.json", qList),
-        panel("Recent activity", "journals of A and B", recentActivity())));
-  }
-  // The level-5 programme: fixed steps, done one by one (ledger/competition/level5.json).
-  function level5Panel() {
-    const p = STATE.level5;
-    if (!p || !(p.steps || []).length) return h("div", null);
-    const kind = { done: "good", running: "info", next: "warning", blocked: "critical", waiting: "" };
-    const rows = p.steps.map((st) => h("tr", null,
-      h("td", { class: "mono", text: st.id }), h("td", { text: st.title }), h("td", { text: st.owner || "" }),
-      h("td", { class: "state" }, h("span", { class: "chip " + (kind[st.state] || "") }, h("span", { class: "ico", text: "●" }), h("span", { text: " " + st.state }))),
-      h("td", { text: st.result || "" })));
-    return panel("Level 5 programme" + (p.goal ? ": " + p.goal : ""), "updated " + ago(p.updated) + " · steps are done in order, one at a time" + (p.note ? " · " + p.note : ""),
-      h("div", { class: "tablewrap" }, h("table", { class: "steps" },
-        h("thead", null, h("tr", null, ["Step", "What", "Who", "State", "Result"].map((t) => h("th", { text: t })))),
-        h("tbody", null, rows))));
-  }
-  // The v2 programme: per candidate line, methods tried one at a time against the score rule
-  // (ledger/competition/v2.json). A state is always an icon plus a word, never colour alone.
-  function v2Panel() {
-    const p = STATE.v2;
-    if (!p || !(p.lines || []).length) return h("div", null);
-    const kind = { done: "good", correct: "good", pass: "good", running: "info", next: "warning", "false": "critical",
-      banned: "critical", invalid: "critical", below: "critical", waiting: "", closed: "" };
-    const stateChip = (s) => h("span", { class: "chip " + (kind[s] || "") },
-      h("span", { class: "ico", "aria-hidden": "true", text: "●" }), h("span", { text: " " + (s || "waiting") }));
-    const score = (x) => (isNum(x) ? x.toFixed(3) : "—");
-    const mark = (label, c, min) => h("span", { class: "v2mark" },
-      h("span", { class: "meta", text: label + " " + ((c && c.name) || "—") + " " }),
-      h("strong", { text: score(c && c.score) }),
-      h("span", { class: "meta", text: " (needs above " + min + ") " }), stateChip((c && c.state) || "waiting"));
-    const body = [];
-    p.lines.forEach((ln) => {
-      const details = [ln.v1 && ln.v1.detail, ln.v2 && ln.v2.detail].filter(Boolean).join(" · ");
-      body.push(h("tr", { class: "linehead" }, h("td", { colspan: "5" },
-        h("div", { class: "t", text: ln.title }),
-        h("div", null, mark("v1", ln.v1, p.v1_min), mark("v2", ln.v2, p.v2_min)),
-        details ? h("div", { class: "meta", text: details }) : null)));
-      (ln.steps || []).forEach((st) => body.push(h("tr", null,
-        h("td", { class: "mono", text: st.id }), h("td", { text: st.title }),
-        h("td", { class: "state" }, stateChip(st.state)),
-        h("td", { class: "num", text: score(st.score) }), h("td", { text: st.result || "" }))));
-    });
-    return panel("v2 programme: every candidate above " + p.v2_min,
-      "updated " + ago(p.updated) + " · one method at a time per line" + (p.note ? " · " + p.note : ""),
-      h("div", null,
-        p.rule ? h("p", { class: "meta", text: p.rule }) : null,
-        h("div", { class: "tablewrap" }, h("table", { class: "steps" },
-          h("thead", null, h("tr", null, ["Step", "What", "State", "Score", "Result"].map((t) => h("th", { text: t })))),
-          h("tbody", null, body)))));
-  }
-  function recentActivity() {
-    const items = [];
-    ["A", "B"].forEach((sess) => {
-      ((STATE.journal || {})[sess] || []).forEach((d) => {
-        String(d.text).split("\n").forEach((line) => {
-          const m = line.match(/^- \*\*(\d\d:\d\d)Z\*\* (.*)$/);
-          if (m) items.push({ sess, when: d.date + " " + m[1], text: m[2] });
-        });
-      });
-    });
-    items.sort((a, b) => b.when.localeCompare(a.when));
-    if (!items.length) return h("div", { class: "empty", text: "No journal entries yet." });
-    return h("div", null, items.slice(0, 8).map((it) => h("div", { class: "md", style: null },
-      h("p", null, h("span", { class: "chip neutral" }, h("span", { class: "ico", text: it.sess === "A" ? "◇" : "◆" }), "Session " + it.sess),
-        " ", h("span", { class: "meta", text: it.when + "Z" }), h("br"), h("span", { html: inline(it.text.slice(0, 400)) })))));
-  }
-
-  // ------------------------------------------------------------------------------------------ methods
-  const LANES = [
-    ["Up next", ["queued", "ready"]],
-    ["In progress", ["running", "awaiting-verdict", "blocked"]],
-    ["Results", ["submit-ready", "correct", "promising", "inconclusive", "invalid", "done"]],
-    ["Parked", ["false", "banned", "draft", "withdrawn", "aborted"]],
-  ];
-  function methodsTab() {
-    const ms = STATE.methods || [];
-    const queuePos = {};
-    ((STATE.queue || {}).items || []).forEach((q, i) => { queuePos[q.id] = i; });
-    const board = h("div", { class: "kanban" });
-    LANES.forEach(([title, sts]) => {
-      const items = ms.filter((m) => sts.indexOf(m.status) >= 0).sort((a, b) =>
-        (queuePos[a.id] !== undefined ? queuePos[a.id] : 999) - (queuePos[b.id] !== undefined ? queuePos[b.id] : 999) ||
-        (b.priority || 0) - (a.priority || 0) || a.id.localeCompare(b.id));
-      const lane = h("div", { class: "lane" }, h("h3", null, title, h("span", { text: String(items.length) })));
-      if (!items.length) lane.append(h("div", { class: "empty", text: "—" }));
-      items.forEach((m) => lane.append(h("div", {
-        class: "card" + (UI.method === m.id ? " sel" : ""), tabindex: "0", role: "button",
-        onclick: () => { UI.method = m.id; render(); },
-        onkeydown: (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); UI.method = m.id; render(); } },
-      },
-        h("div", { class: "row" }, h("span", { class: "mono", text: m.id }), chip(m.status), m.kind === "calibration" ? h("span", { class: "tag", text: "calibration" }) : h("span", { class: "tag", text: m.family })),
-        h("div", { class: "t", text: m.title }),
-        h("div", { class: "row" },
-          isNum(m.priority) ? h("span", { text: "prio " + m.priority.toFixed(2) }) : null,
-          isNum(m.expected_delta) ? h("span", { text: "E[Δ] " + pts(m.expected_delta) }) : null,
-          m.best ? h("span", { text: "best " + pts(m.best.delta) + " (" + m.best.experiment + ")" }) : null))));
-      board.append(lane);
-    });
-    const sel = ms.find((m) => m.id === UI.method);
-    return h("div", null, board, sel ? methodDetail(sel) : h("div", { class: "empty", text: "Select a card to read it." }));
-  }
-  function methodDetail(m) {
-    const exps = (STATE.experiments || []).filter((e) => e.method === m.id);
-    return h("section", { class: "panel detail" },
-      h("h2", null, m.id + " — " + m.title),
-      h("div", { class: "kv" },
-        h("span", { class: "k", text: "Status" }), h("span", null, chip(m.status)),
-        h("span", { class: "k", text: "Family" }), h("span", { text: m.family + (m.parent ? " · deepens " + m.parent : "") }),
-        h("span", { class: "k", text: "Tags" }), h("span", null, (m.tags || []).map((t) => h("span", { class: "tag", text: t }))),
-        h("span", { class: "k", text: "Priority" }), h("span", { text: isNum(m.priority) ? m.priority.toFixed(3) + "  (E[Δ] " + pts(m.expected_delta) + ", p " + (m.p_works !== undefined ? m.p_works : "—") + ", " + (m.gpu_hours !== undefined ? m.gpu_hours : "—") + " GPU-h)" : "—" }),
-        h("span", { class: "k", text: "Experiments" }), h("span", null, exps.length ? exps.map((e) => h("a", { href: "#", onclick: (ev) => { ev.preventDefault(); UI.tab = "experiments"; UI.exp = e.id; render(); }, text: e.id + " " })) : "none yet"),
-        m.bans && m.bans.length ? h("span", { class: "k", text: "Banned by" }) : null, m.bans && m.bans.length ? h("span", { text: m.bans.join(", ") }) : null,
-        h("span", { class: "k", text: "Sources" }), h("span", null, (m.sources || []).length ? m.sources.map((u) => h("div", null, /^https?:/.test(u) ? h("a", { href: u, target: "_blank", rel: "noopener noreferrer", text: u }) : h("span", { class: "mono", text: u }))) : "—")),
-      mdBox(m.body));
-  }
-
-  // ------------------------------------------------------------------------------------------ experiments
-  function experimentsTab() {
-    const exps = (STATE.experiments || []).slice().sort((a, b) => String(b.updated || b.created).localeCompare(String(a.updated || a.created)));
-    if (!exps.length) return panel("Experiments", "", h("div", { class: "empty", text: "No experiments yet. Session B claims methods from the queue." }));
-    const tbl = h("table", null,
-      h("thead", null, h("tr", null, ["ID", "Method", "State", "Tier", "Δ pts", "90% CI", "P(win)", "n", "Voids", "Verdict", "GPU-h", "Updated"].map((t, i) =>
-        h("th", { class: i >= 4 && i <= 8 || i === 10 ? "num" : null, text: t })))),
-      h("tbody", null, exps.map((e) => {
-        const v = e.verdict || {};
-        return h("tr", { class: "clickable" + (UI.exp === e.id ? " sel" : ""), onclick: () => { UI.exp = e.id; render(); } },
-          h("td", { class: "mono", text: e.id }), h("td", { class: "mono", text: e.method }), h("td", null, chip(e.state === "done" ? "done" : e.state)),
-          h("td", { text: e.tier || "—" }), h("td", { class: "num", text: pts(v.delta_points) }),
-          h("td", { class: "num", text: v.ci ? "[" + pts(v.ci[0]) + ", " + pts(v.ci[1]) + "]" : "—" }),
-          h("td", { class: "num", text: pct(v.p_win_duel) }), h("td", { class: "num", text: isNum(v.n_paired) ? String(v.n_paired) : "—" }),
-          h("td", { class: "num", text: isNum(v.void_frac) ? Math.round(v.void_frac * 100) + "%" : "—" }),
-          h("td", null, v.class ? chip(v.class.toLowerCase()) : "—"), h("td", { class: "num", text: isNum(e.gpu_hours) ? e.gpu_hours.toFixed(1) : "—" }),
-          h("td", { text: ago(e.updated || e.created) }));
-      })));
-    const sel = exps.find((e) => e.id === UI.exp);
-    return h("div", null, panel("Experiments", "click a row for details", h("div", { class: "tablewrap" }, tbl)), sel ? experimentDetail(sel) : null);
-  }
-  function experimentDetail(e) {
-    const v = e.verdict;
-    const sanity = e.sanity || {};
-    const kv = h("div", { class: "kv" },
-      h("span", { class: "k", text: "Method" }), h("span", { text: e.method + " — " + methodTitle(e.method) }),
-      h("span", { class: "k", text: "King" }), h("span", { text: e.king ? (e.king.repo || "") + " (" + (e.king.key || "") + ")" : "—" }),
-      h("span", { class: "k", text: "Base" }), h("span", { text: e.base ? (e.base.name || "—") : "—" }),
-      h("span", { class: "k", text: "Data" }), h("span", { text: e.data ? (e.data.description || "—") + (e.data.n_pairs ? " · " + e.data.n_pairs + " pairs" : "") : "—" }),
-      h("span", { class: "k", text: "Sanity" }), h("span", null, Object.keys(sanity).length ? Object.keys(sanity).map((k) => h("span", { class: "tag", text: (sanity[k] === true ? "✓ " : sanity[k] === false ? "✕ " : "· ") + k })) : "—"),
-      v ? h("span", { class: "k", text: "Verdict" }) : null, v ? h("span", null, chip((v.class || "").toLowerCase()), " Δ " + pts(v.delta_points) + " pts, SE " + (isNum(v.se_points) ? v.se_points.toFixed(2) : "—") + ", P(Δ>0) " + pct(v.p_delta_gt0) + ", P(win) " + pct(v.p_win_duel)) : null,
-      v && v.holdout ? h("span", { class: "k", text: "Holdout" }) : null, v && v.holdout ? h("span", { text: (v.holdout.pool || "") + ": Δ " + pts(v.holdout.delta_points) + " pts on " + v.holdout.n_paired + " units, P(win) " + pct(v.holdout.p_win_duel) }) : null,
-      v && v.pooled ? h("span", { class: "k", text: "Dev + holdout" }) : null, v && v.pooled ? h("span", { text: "Δ " + pts(v.pooled.delta_points) + " pts on " + v.pooled.n_paired + " units, P(Δ>0) " + pct(v.pooled.p_delta_gt0) + ", P(win) " + pct(v.pooled.p_win_duel) }) : null,
-      v && v.ticket ? h("span", { class: "k", text: "One entry" }) : null, v && v.ticket ? h("span", { text: "worth " + tao(v.ticket.ev_tao) + " = P(win) " + pct(v.ticket.p_win) + " × " + v.ticket.crown_value_tao + " TAO − " + v.ticket.burn_tao + " TAO fee (from " + v.ticket.basis + ")" }) : null,
-      v && v.partial ? h("span", { class: "k", text: "Stopped early" }) : null, v && v.partial ? h("span", { text: v.partial.tasks_evaluated.length + " of " + (v.partial.tasks_evaluated.length + v.partial.tasks_missing.length) + " tasks run; Δ is in points of the full score, tasks not run counted as 0" }) : null,
-      v && v.reasons ? h("span", { class: "k", text: "Reasons" }) : null, v && v.reasons ? h("span", { text: v.reasons.join(" · ") }) : null,
-      e.reason ? h("span", { class: "k", text: "Note" }) : null, e.reason ? h("span", { text: e.reason }) : null);
-    return h("div", { class: "grid2 detail" },
-      panel(e.id + " — details", e.state, h("div", null, kv, e.note ? mdBox(e.note) : null)),
-      panel("Per-task success — " + e.id, "candidate vs king on the same units", chartBox("dumbbell", { v })));
-  }
-
-  // ------------------------------------------------------------------------------------------ candidates / bans
-  function candidatesTab() {
-    const cs = STATE.candidates || [];
-    if (!cs.length) return panel("Candidate vault", "", h("div", { class: "empty", text: "No candidates yet. CORRECT experiments are vaulted here." }));
-    return panel("Candidate vault", "weights live in private HF backups; never public until submitted", h("div", { class: "tablewrap" }, h("table", null,
-      h("thead", null, h("tr", null, ["ID", "Status", "Experiment", "Method", "Δ pts", "P(win)", "King", "sha256", "Submission", ""].map((t, i) => h("th", { class: i === 4 || i === 5 ? "num" : null, text: t })))),
-      h("tbody", null, cs.map((c) => {
-        const sc = (c.scores || [])[c.scores ? c.scores.length - 1 : 0] || {};
-        const sub = c.submission;
-        return h("tr", null, h("td", { class: "mono", text: c.id }), h("td", null, chip(c.status)), h("td", { class: "mono", text: c.experiment }),
-          h("td", { class: "mono", text: c.method || "" }), h("td", { class: "num", text: pts(sc.delta_points) }), h("td", { class: "num", text: pct(sc.p_win_duel) }),
-          h("td", { text: sc.king ? sc.king.repo || "" : "" }), h("td", { class: "mono", text: String(c.sha256 || "").slice(0, 12) }),
-          h("td", { text: sub ? (sub.repo || "") + (sub.commit_block ? " @" + sub.commit_block : "") : "—" }),
-          h("td", null, c.status === "submit-ready" ? h("a", { class: "btn small primary", target: "_blank", rel: "noopener noreferrer", href: issueUrl("APPROVE", c.id, "", "I approve submitting " + c.id + " to SN58 (finney, netuid 58).\n\nRegistered hotkey: wallet.name=<name> wallet.hotkey=<hotkey>\n"), text: "Approve" }) : null));
-      })))));
-  }
-  function bansTab() {
-    const bs = STATE.bans || [];
-    if (!bs.length) return panel("Ban list", "", h("div", { class: "empty", text: "No bans yet. FALSE verdicts become scoped bans here." }));
-    return h("div", null, bs.map((b) => h("section", { class: "panel" },
-      h("h2", null, b.id + " ", chip(b.scope), h("span", { class: "hint", text: (b.methods || []).join(", ") + " · " + (b.family || "") + " · level " + (b.level !== undefined ? b.level : "—") + " · " + (b.created || "") })),
-      h("div", { class: "md" }, h("p", null, h("strong", { text: "Do not propose: " }), String(b.do_not_propose || ""))),
-      h("div", null, (b.tags || []).map((t) => h("span", { class: "tag", text: t })), (b.evidence || []).length ? h("span", { class: "meta", text: " evidence " + b.evidence.join(", ") }) : null),
-      mdBox(b.body || ""))));
-  }
-
-  // ------------------------------------------------------------------------------------------ competition
-  function competitionTab() {
-    const c = STATE.competition || {};
-    const kings = h("table", null, h("thead", null, h("tr", null, ["Place", "Repo", "Key", "sha256", "Revision"].map((t) => h("th", { text: t })))),
-      h("tbody", null, (c.kings || []).map((k) => h("tr", null, h("td", { text: String(k.place) }), h("td", { text: k.repo }), h("td", { class: "mono", text: k.key }),
-        h("td", { class: "mono", text: String(k.sha256 || "").slice(0, 16) }), h("td", { class: "mono", text: String(k.revision || "").slice(0, 10) })))));
-    const sp = c.spec || {};
-    const spec = h("div", { class: "kv" },
-      h("span", { class: "k", text: "Spec version" }), h("span", { text: String(sp.version !== undefined ? sp.version : "—") + " @ " + String(sp.sha || "").slice(0, 10) }),
-      h("span", { class: "k", text: "Level" }), h("span", { text: String(sp.level !== undefined ? sp.level : "—") + (c.level_since ? " (since " + ago(c.level_since.first_seen) + ")" : "") }),
-      h("span", { class: "k", text: "Crown" }), h("span", { text: sp.crown ? "margin +" + sp.crown.margin + " pts · max void " + Math.round(sp.crown.max_void * 100) + "%" : "—" }),
-      h("span", { class: "k", text: "Units" }), h("span", { text: ((sp.tasks || []).length || "—") + " tasks × " + (sp.runs_per_task || "—") + " · step ratio " + (sp.step_ratio || "—") }),
-      h("span", { class: "k", text: "Architecture" }), h("span", { text: sp.model ? sp.model.architecture : "—" }),
-      h("span", { class: "k", text: "Tasks" }), h("span", null, (sp.tasks || []).map((t) => h("span", { class: "tag", text: t }))));
-    const heads = h("table", null, h("thead", null, h("tr", null, ["Repo", "Branch", "Head", "Date", "Last commit"].map((t) => h("th", { text: t })))),
-      h("tbody", null, Object.keys(c.heads || {}).map((n) => { const x = c.heads[n]; return h("tr", null, h("td", { text: n }), h("td", { text: x.branch }), h("td", { class: "mono", text: String(x.sha || "").slice(0, 10) }), h("td", { text: ago(x.date) }), h("td", { text: x.message })); })));
-    const events = [];
-    (STATE.competition_history || []).forEach((hh) => (hh.changes || []).forEach((ch) => events.push({ at: hh.at, ch })));
-    ((HIST && HIST.events) || []).forEach((ev) => events.push({ at: ev.at, ch: ev }));
-    events.sort((a, b) => String(b.at).localeCompare(String(a.at)));
-    const seen = new Set();
-    const evList = events.filter((e) => { const k = e.at + JSON.stringify(e.ch); if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 40);
-    const describe = (ch) => ch.kind === "crown" ? "Crown: " + (ch.from || "none") + " → " + ch.to
-      : ch.kind === "level" ? "Level " + ch.from + " → " + ch.to
-        : ch.kind === "spec" ? "Spec fields changed: " + (ch.fields || []).join(", ")
-          : ch.kind === "kings" ? "Kings list changed"
-            : ch.kind === "head" ? (ch.repo + " moved: " + (ch.message || ""))
-              : ch.kind === "model" ? (ch.repo + " updated")
-                : ch.kind === "branch" ? (ch.repo + ": branch " + ch.branch + " " + ch.change)
-                  : ch.kind === "gate" ? ("Level gate (" + ch.branch + "): max level " + ch.from + " → " + ch.to)
-                    : ch.kind === "gate-factors" ? ("Level gate (" + ch.branch + "): factors changed" + (ch.added ? ", new: " + Object.keys(ch.added).join(", ") : ""))
-                      : ch.kind === "level-config" ? ("Benchmark (" + ch.branch + "): new level config " + (ch.added || []).join(", "))
-                        : ch.kind === "spec-branch" ? ("Orchestrator branch " + ch.branch + ": spec level " + ((ch.spec || {}).level))
-                          : ch.kind === "docs" ? ("Docs: Vector is at level " + ch.level + ", next: " + ch.next)
-                            : ch.kind === "repo" ? ("New public repository: " + ch.name) : JSON.stringify(ch);
-    const w = (CROWN && CROWN.watch) || {};
-    const gate = (w.gate && w.gate.vector) || {};
-    const brRows = [];
-    Object.keys(w.branches || {}).forEach((repo) => Object.keys(w.branches[repo] || {}).forEach((b) => {
-      const sp = repo === "vector-orchestrator" ? (w.spec_branches || {})[b] : null;
-      brRows.push(h("tr", null, h("td", { text: repo }), h("td", { text: b }), h("td", { class: "mono", text: String(w.branches[repo][b]).slice(0, 10) }),
-        h("td", { text: sp ? "spec level " + sp.level + " · " + sp.tasks + " tasks · step ratio " + sp.step_ratio + " · margin " + sp.margin : "" })));
-    }));
-    const watchBody = CROWN && CROWN.watch ? h("div", null,
-      h("div", { class: "kv" },
-        h("span", { class: "k", text: "Level gate" }), h("span", { text: "max level " + gateMax(CROWN) + " · configs " + ((gate.level_configs || []).join(", ") || "—") }),
-        h("span", { class: "k", text: "Factors" }), h("span", null, Object.keys(gate.factors || {}).map((f) => h("span", { class: "tag", text: f + " L" + gate.factors[f] }))),
-        h("span", { class: "k", text: "Docs" }), h("span", { text: "Vector is at level " + ((w.docs || {}).level || "—") + " · next: " + ((w.docs || {}).next || "—") }),
-        h("span", { class: "k", text: "Checked" }), h("span", { text: ago(CROWN.checked_at) + " by the " + (CROWN.checked_by || "watch") + " watch" + ((w.errors || []).length ? " · could not read: " + w.errors.join(", ") : "") })),
-      h("div", { class: "tablewrap" }, h("table", null,
-        h("thead", null, h("tr", null, ["Repository", "Branch", "Head", "Spec on that branch"].map((t) => h("th", { text: t })))),
-        h("tbody", null, brRows))))
-      : h("div", { class: "empty", text: "The level watch has not reported yet." });
-    return h("div", null,
-      h("div", { class: "grid2" }, panel("The four paid kings", "newest first; weights public in robotensor/vector-kings", h("div", { class: "tablewrap" }, kings)),
-        panel("Spec", "vector-orchestrator spec.json", spec)),
-      panel("Level watch", "what would announce the next level: branches, the benchmark's level gate, the docs", watchBody),
-      panel("Pinned repositories", "a move means re-pin and re-baseline", h("div", { class: "tablewrap" }, heads)),
-      panel("Timeline", "crown, level, spec and repo changes", evList.length
-        ? h("div", { class: "tablewrap" }, h("table", null, h("tbody", null, evList.map((e) => h("tr", null, h("td", { class: "mono", text: String(e.at || "").replace("T", " ").replace("Z", "Z") }), h("td", { text: describe(e.ch) }))))))
-        : h("div", { class: "empty", text: "No changes recorded yet." })));
-  }
-
-  // ------------------------------------------------------------------------------------------ journal / notes
-  function journalTab() {
-    const col = (sess, title) => {
-      const days = (STATE.journal || {})[sess] || [];
-      return panel(title, "last 14 days", days.length ? h("div", null, days.map((d) => mdBox(d.text))) : h("div", { class: "empty", text: "No entries." }));
-    };
-    return h("div", { class: "journal" }, col("A", "Session A — researcher"), col("B", "Session B — engineer"));
-  }
-  function notesTab() {
-    const notes = STATE.notes || [];
-    const props = STATE.proposals || [];
-    return h("div", null,
-      props.length ? panel("Proposals from B", "", h("div", null, props.map((p) => h("div", null, h("h3", { text: p.id + " — " + (p.title || "") }), mdBox(p.body))))) : null,
-      notes.length ? notes.map((n) => panel(n.name, "ledger/notes", mdBox(n.text))) : panel("Notes", "", h("div", { class: "empty", text: "No notes yet." })));
-  }
-
-  // ------------------------------------------------------------------------------------------ charts
-  // Placeholders are drawn after insertion so they can use their real pixel width (text stays 12px on phones).
-  function chartBox(kind, data) {
-    const id = kind + ":" + (data && data.v ? "v" : "rows");
-    const holder = h("div", { class: "chart" });
-    holder.__chart = { kind, data };
-    const tableOn = !!UI.tables[kind];
-    const toggle = h("button", { class: "btn small", type: "button", "aria-pressed": tableOn ? "true" : "false", text: tableOn ? "Chart view" : "Table view",
-      onclick: () => { UI.tables[kind] = !UI.tables[kind]; render(); } });
-    return h("div", { "data-chart-id": id }, h("div", { style: null, class: "legend-row" }, toggle), holder);
-  }
-  function drawCharts() {
-    document.querySelectorAll(".chart").forEach((holder) => {
-      const spec = holder.__chart;
-      if (!spec) return;
-      holder.replaceChildren();
-      const W = Math.max(280, Math.floor(holder.clientWidth || 600));
-      if (UI.tables[spec.kind]) {
-        holder.append(spec.kind === "delta" ? deltaTable(spec.data.rows) : spec.kind === "bplevels" ? bpLevelsTable(spec.data)
-          : spec.kind === "bpfail" ? bpFailTable(spec.data) : dumbbellTable(spec.data.v));
-        return;
+  async function refreshSignals() {
+    if (sigBusy || document.hidden || !RAW || !BLOB) { renderStatus(); return; }
+    sigBusy = true;
+    try {
+      const got = await getSignalsBlob(), b = got[0];
+      SIG_SRC = got[1]; SIG_ERR = "";
+      if (b.ct !== SIG_CT) {
+        if (b.salt !== BLOB.salt) SIG_ERR = "the live feed uses another key";
+        else { SIG = await decryptBlob(b, RAW); SIG_CT = b.ct; if (STATE) render(); }
       }
-      if (spec.kind === "delta") deltaChart(holder, W, spec.data.rows);
-      else if (spec.kind === "bplevels") bpLevelsChart(holder, W, spec.data);
-      else if (spec.kind === "bpfail") bpFailChart(holder, W, spec.data);
-      else dumbbellChart(holder, W, spec.data.v);
-    });
+    } catch (e) { SIG_ERR = e.message; }
+    finally { sigBusy = false; renderStatus(); }
   }
-  function niceTicks(lo, hi, n) {
-    const span = hi - lo || 1;
-    const raw = span / Math.max(n, 1);
-    const mag = Math.pow(10, Math.floor(Math.log10(raw)));
-    const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => span / s <= n + 0.5) || 10 * mag;
-    const out = [];
-    for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) out.push(Math.round(v * 1e6) / 1e6);
-    return out;
+  function toggleTheme() {
+    const root = document.documentElement;
+    const cur = root.getAttribute("data-theme") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    const next = cur === "dark" ? "light" : "dark";
+    root.setAttribute("data-theme", next); store.set("attune.theme", next);
   }
-  function tipLayer(holder) {
-    const tip = h("div", { class: "tip", role: "tooltip" });
-    holder.append(tip);
-    return {
-      show(x, y, title, rows) {
-        tip.replaceChildren(h("div", { class: "h", text: title }), ...rows.map((r) => h("div", { class: "r" },
-          h("span", { class: "key" }, r.color ? h("i", { style: null }) : null, r.label), h("b", { text: r.value }))));
-        // colour the line keys after creation (no inline style attribute in CSP-strict markup)
-        const keys = tip.querySelectorAll(".key i");
-        let k = 0;
-        rows.forEach((r) => { if (r.color) { keys[k].style.background = r.color; k++; } });
-        tip.style.display = "block";
-        const tw = tip.offsetWidth, th = tip.offsetHeight, W = holder.clientWidth;
-        let left = x + 14, top = y - th / 2;
-        if (left + tw > W) left = Math.max(0, x - tw - 14);
-        if (top < 0) top = 0;
-        tip.style.left = left + "px";
-        tip.style.top = top + "px";
-      },
-      hide() { tip.style.display = "none"; },
-    };
+  async function boot() {
+    $("#theme-btn").addEventListener("click", toggleTheme);
+    $("#lock-btn").addEventListener("click", () => { store.del(keyName()); RAW = null; STATE = null; SIG = null; SIG_CT = null; renderLock(); });
+    try { BLOB = await getJSON("state.enc.json"); }
+    catch (e) { $("#app").replaceChildren(h("section", { class: "panel" }, h("div", { class: "empty", text: "No dashboard data published yet (" + e.message + ")." }))); return; }
+    const saved = store.get(keyName());
+    if (saved) { try { RAW = b64d(saved); STATE = await decryptBlob(BLOB, RAW); } catch (e) { store.del(keyName()); RAW = null; STATE = null; } }
+    if (STATE) render(); else renderLock();
+    setInterval(refreshState, CONF.stateMs);
+    setInterval(refreshSignals, CONF.signalsMs);
+    setInterval(() => { if (STATE && UI.tab === "overview") renderStatus(); }, 5000);
+    refreshSignals();
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) { refreshState(); refreshSignals(); } });
   }
-  const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-  function bindHit(rect, tip, holder, fn) {
-    const show = (ev) => {
-      const box = holder.getBoundingClientRect();
-      let x, y;
-      if (ev && ev.clientX !== undefined) { x = ev.clientX - box.left; y = ev.clientY - box.top; }
-      else { const rb = rect.getBoundingClientRect(); x = rb.left - box.left + rb.width / 2; y = rb.top - box.top + rb.height / 2; }
-      rect.classList.add("on");
-      fn(x, y);
-    };
-    const hide = () => { rect.classList.remove("on"); tip.hide(); };
-    rect.addEventListener("pointermove", show);
-    rect.addEventListener("pointerleave", hide);
-    rect.addEventListener("focus", show);
-    rect.addEventListener("blur", hide);
-  }
-
-  // Bin picking: scenes solved per 1,000, version by version (one series, so no legend; the goal and the rank line are
-  // reference lines labelled in text ink; the last point carries its value; every point has a tooltip).
-  function bpLevelsChart(holder, W, data) {
-    const rows = data.rows || [];
-    if (!rows.length) { holder.append(h("div", { class: "empty", text: "No measured version yet." })); return; }
-    const H = 280, m = { l: 44, r: 104, t: 14, b: 44 };
-    const refs = [[data.goal, "goal"], [data.rank, "rank line"]].filter((r) => isNum(r[0]));
-    const vals = rows.map((d) => d.solved).concat(refs.map((r) => r[0]));
-    const lo = Math.floor((Math.min.apply(null, vals) - 6) / 10) * 10, hi = Math.min(1000, Math.ceil((Math.max.apply(null, vals) + 4) / 10) * 10);
-    const iw = W - m.l - m.r, ih = H - m.t - m.b;
-    const y = (v) => m.t + ((hi - v) / (hi - lo)) * ih;
-    const step = iw / rows.length, x = (i) => m.l + step * (i + 0.5);
-    const svgEl = s("svg", { viewBox: "0 0 " + W + " " + H, width: W, height: H, role: "img", "aria-label": "Scenes solved per 1,000, version by version, against the goal and the rank line" });
-    niceTicks(lo, hi, 5).forEach((t) => {
-      svgEl.append(s("line", { class: "gridline", x1: m.l, x2: W - m.r, y1: y(t), y2: y(t) }));
-      svgEl.append(s("text", { x: m.l - 6, y: y(t) + 4, "text-anchor": "end" }, String(t)));
-    });
-    let lastLabY = null;
-    refs.sort((a, b) => b[0] - a[0]).forEach((r) => {
-      svgEl.append(s("line", { class: "ref", x1: m.l, x2: W - m.r, y1: y(r[0]), y2: y(r[0]), "stroke-dasharray": "4 3" }));
-      let ly = y(r[0]) + 4;
-      if (lastLabY !== null && ly - lastLabY < 14) ly = lastLabY + 14;
-      lastLabY = ly;
-      svgEl.append(s("text", { class: "lab", x: W - m.r + 6, y: ly }, r[1] + " " + r[0]));
-    });
-    const accent = cssVar("--accent"), surface = cssVar("--surface-1");
-    if (rows.length > 1) svgEl.append(s("path", { d: rows.map((d, i) => (i ? "L" : "M") + x(i) + " " + y(d.solved)).join(" "), fill: "none", stroke: accent, "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round" }));
-    const every = Math.max(1, Math.ceil(rows.length / Math.max(1, Math.floor(iw / 64))));
-    rows.forEach((d, i) => {
-      svgEl.append(s("circle", { cx: x(i), cy: y(d.solved), r: 5, fill: accent, stroke: surface, "stroke-width": 2 }));
-      if (i % every === 0 || i === rows.length - 1) svgEl.append(s("text", { x: x(i), y: H - m.b + 16, "text-anchor": "middle" }, d.name));
-    });
-    const lastRow = rows[rows.length - 1];
-    svgEl.append(s("text", { class: "strong", x: x(rows.length - 1) + 9, y: y(lastRow.solved) - 8 }, String(lastRow.solved)));
-    svgEl.append(s("text", { x: m.l, y: H - 6 }, "version"));
-    const tip = tipLayer(holder);
-    rows.forEach((d, i) => {
-      const hw = Math.max(24, step);
-      const r = s("rect", { class: "hit", x: x(i) - hw / 2, y: m.t, width: hw, height: ih, tabindex: 0, role: "button",
-        "aria-label": d.name + ": " + d.solved + " of " + (d.of || 1000) + " scenes solved" });
-      const tipRows = [{ label: "Solved", value: d.solved + " of " + fmtInt(d.of || 1000), color: accent }];
-      if (d.set) tipRows.push({ label: "Set", value: String(d.set) });
-      if (isNum(d.paired)) tipRows.push({ label: "Version before, same scenes", value: String(d.paired) });
-      if (isNum(data.goal)) tipRows.push({ label: "Short of the goal", value: String(Math.max(0, data.goal - d.solved)) });
-      bindHit(r, tip, holder, (px, py) => tip.show(px, py, d.name + (d.note ? " · " + d.note : ""), tipRows));
-      svgEl.append(r);
-    });
-    holder.prepend(svgEl);
-  }
-  function bpLevelsTable(data) {
-    const rows = data.rows || [];
-    if (!rows.length) return h("div", { class: "empty", text: "No measured version yet." });
-    return h("div", { class: "tablewrap" }, h("table", null,
-      h("thead", null, h("tr", null, ["Version", "Set", "Solved", "Of", "Version before, same scenes", "Note"].map((t, i) => h("th", { class: i >= 2 && i <= 4 ? "num" : null, text: t })))),
-      h("tbody", null, rows.map((d) => h("tr", null, h("td", { class: "mono", text: d.name }), h("td", { text: String(d.set || "") }),
-        h("td", { class: "num", text: String(d.solved) }), h("td", { class: "num", text: fmtInt(d.of || 1000) }),
-        h("td", { class: "num", text: isNum(d.paired) ? String(d.paired) : "—" }), h("td", { text: d.note || "" }))))));
-  }
-  // Bin picking: the scenes that still fail, by what would fix them (magnitude: one hue, bars from a common baseline with
-  // a rounded data end, the category named above each bar and the count at its end).
-  function bpFailChart(holder, W, data) {
-    const rows = data.rows || [];
-    if (!rows.length) { holder.append(h("div", { class: "empty", text: "No failure census yet." })); return; }
-    const m = { l: 2, r: 46, t: 4, b: 6 }, labH = 18, barH = 14, gap = 12;
-    const H = m.t + rows.length * (labH + barH + gap) + m.b;
-    const max = Math.max.apply(null, rows.map((d) => d.n)) || 1, iw = W - m.l - m.r;
-    const total = isNum(data.of) ? data.of : rows.reduce((a, d) => a + d.n, 0);
-    const svgEl = s("svg", { viewBox: "0 0 " + W + " " + H, width: W, height: H, role: "img", "aria-label": "Scenes that still fail, by what would fix them" });
-    const accent = cssVar("--accent");
-    const tip = tipLayer(holder);
-    rows.forEach((d, i) => {
-      const y0 = m.t + i * (labH + barH + gap);
-      svgEl.append(s("text", { class: "lab", x: m.l, y: y0 + 12 }, d.name));
-      const w = Math.max(2, (d.n / max) * iw), yb = y0 + labH, rr = Math.min(4, w / 2);
-      svgEl.append(s("path", { d: "M" + m.l + " " + yb + " h" + (w - rr) + " a" + rr + " " + rr + " 0 0 1 " + rr + " " + rr + " v" + (barH - 2 * rr) +
-        " a" + rr + " " + rr + " 0 0 1 " + (-rr) + " " + rr + " h" + (-(w - rr)) + " z", fill: accent }));
-      svgEl.append(s("text", { class: "strong", x: m.l + w + 6, y: yb + barH - 3 }, String(d.n)));
-      const r = s("rect", { class: "hit", x: m.l, y: y0, width: W - m.l, height: labH + barH + 2, tabindex: 0, role: "button",
-        "aria-label": d.name + ": " + d.n + " of " + total + " failing scenes" });
-      const tipRows = [{ label: "Scenes", value: d.n + " of " + total, color: accent }, { label: "Share", value: Math.round((100 * d.n) / total) + "%" }];
-      if (d.fix) tipRows.push({ label: "Method", value: d.fix });
-      bindHit(r, tip, holder, (px, py) => tip.show(px, py, d.name, tipRows));
-      svgEl.append(r);
-    });
-    holder.prepend(svgEl);
-  }
-  function bpFailTable(data) {
-    const rows = data.rows || [];
-    if (!rows.length) return h("div", { class: "empty", text: "No failure census yet." });
-    const total = isNum(data.of) ? data.of : rows.reduce((a, d) => a + d.n, 0);
-    return h("div", { class: "tablewrap" }, h("table", null,
-      h("thead", null, h("tr", null, ["What still fails", "Scenes", "Share", "Method that aims at it"].map((t, i) => h("th", { class: i === 1 || i === 2 ? "num" : null, text: t })))),
-      h("tbody", null, rows.map((d) => h("tr", null, h("td", { text: d.name }), h("td", { class: "num", text: String(d.n) }),
-        h("td", { class: "num", text: Math.round((100 * d.n) / total) + "%" }), h("td", { text: d.fix || "" }))))));
-  }
-
-  function deltaChart(holder, W, rows) {
-    if (!rows || !rows.length) { holder.append(h("div", { class: "empty", text: "No verdicts yet — calibration (R-0001…R-0006) runs first." })); return; }
-    const items = rows.slice(-40);
-    const margin = (STATE.config && STATE.config.verdict && STATE.config.verdict.margin_points) || 3;
-    const H = 300, m = { l: 40, r: 58, t: 12, b: 40 };
-    let lo = -5, hi = margin + 3;
-    items.forEach((d) => { const c = d.ci || [d.delta, d.delta]; lo = Math.min(lo, c[0], d.delta); hi = Math.max(hi, c[1], d.delta); });
-    const pad = (hi - lo) * 0.06; lo -= pad; hi += pad;
-    const iw = W - m.l - m.r, ih = H - m.t - m.b;
-    const y = (v) => m.t + ((hi - v) / (hi - lo)) * ih;
-    const step = iw / items.length;
-    const x = (i) => m.l + step * (i + 0.5);
-    const svgEl = s("svg", { viewBox: "0 0 " + W + " " + H, width: W, height: H, role: "img", "aria-label": "Verdict deltas against the king with 90% confidence intervals" });
-    niceTicks(lo, hi, 5).forEach((t) => {
-      svgEl.append(s("line", { class: t === 0 ? "base" : "gridline", x1: m.l, x2: W - m.r, y1: y(t), y2: y(t) }));
-      svgEl.append(s("text", { x: m.l - 6, y: y(t) + 4, "text-anchor": "end" }, (t > 0 ? "+" : t < 0 ? "−" : "") + Math.abs(t)));
-    });
-    if (lo < 0 && hi > 0) svgEl.append(s("line", { class: "base", x1: m.l, x2: W - m.r, y1: y(0), y2: y(0) }));
-    svgEl.append(s("line", { class: "ref", x1: m.l, x2: W - m.r, y1: y(margin), y2: y(margin) }));
-    svgEl.append(s("text", { class: "lab", x: W - m.r + 6, y: y(margin) - 2 }, "margin"));
-    svgEl.append(s("text", { class: "lab", x: W - m.r + 6, y: y(margin) + 12 }, "+" + margin + " pts"));
-    const accent = cssVar("--accent"), surface = cssVar("--surface-1");
-    const every = Math.max(1, Math.ceil(items.length / Math.max(1, Math.floor(iw / 56))));
-    const tip = tipLayer(holder);
-    items.forEach((d, i) => {
-      const c = d.ci || [d.delta, d.delta];
-      svgEl.append(s("line", { x1: x(i), x2: x(i), y1: y(c[0]), y2: y(c[1]), stroke: accent, "stroke-width": 2, "stroke-linecap": "round", opacity: d.current ? 1 : 0.45 }));
-      svgEl.append(s("circle", { cx: x(i), cy: y(d.delta), r: 5, fill: accent, stroke: surface, "stroke-width": 2, opacity: d.current ? 1 : 0.45 }));
-      if (i % every === 0 || i === items.length - 1) svgEl.append(s("text", { x: x(i), y: H - m.b + 16, "text-anchor": "middle" }, d.id.replace("E-", "")));
-    });
-    svgEl.append(s("text", { x: m.l, y: H - 6 }, "experiment"));
-    const best = bestRow(items);
-    if (best) {
-      const i = items.indexOf(best);
-      svgEl.append(s("text", { class: "strong", x: x(i) + 9, y: y(best.delta) - 8 }, pts(best.delta)));
-    }
-    items.forEach((d, i) => {
-      const hw = Math.max(24, step);
-      const r = s("rect", { class: "hit", x: x(i) - hw / 2, y: m.t, width: hw, height: ih, tabindex: 0, role: "button",
-        "aria-label": d.id + " delta " + pts(d.delta) + " points, verdict " + d.cls });
-      bindHit(r, tip, holder, (px, py) => tip.show(px, py, d.id + " · " + d.method + " · " + d.cls, [
-        { label: "Δ vs king", value: pts(d.delta, 2) + " pts", color: accent },
-        { label: "90% CI", value: d.ci ? "[" + pts(d.ci[0]) + ", " + pts(d.ci[1]) + "]" : "—" },
-        { label: "P(win duel)", value: pct(d.pwin) },
-        { label: "Units / tier", value: (d.n || "—") + " / " + (d.tier || "—") },
-        { label: "King", value: d.current ? "current" : "previous" },
-      ]));
-      r.addEventListener("click", () => { UI.exp = d.id; UI.tab = "experiments"; render(); });
-      svgEl.append(r);
-    });
-    holder.prepend(svgEl);
-  }
-  function deltaTable(rows) {
-    if (!rows || !rows.length) return h("div", { class: "empty", text: "No verdicts yet." });
-    return h("div", { class: "tablewrap" }, h("table", null,
-      h("thead", null, h("tr", null, ["Experiment", "Method", "Verdict", "Δ pts", "90% CI", "P(win)", "n"].map((t, i) => h("th", { class: i >= 3 ? "num" : null, text: t })))),
-      h("tbody", null, rows.slice().reverse().map((d) => h("tr", null, h("td", { class: "mono", text: d.id }), h("td", { class: "mono", text: d.method }),
-        h("td", null, chip(String(d.cls).toLowerCase())), h("td", { class: "num", text: pts(d.delta) }),
-        h("td", { class: "num", text: d.ci ? "[" + pts(d.ci[0]) + ", " + pts(d.ci[1]) + "]" : "—" }), h("td", { class: "num", text: pct(d.pwin) }),
-        h("td", { class: "num", text: String(d.n || "—") }))))));
-  }
-  function dumbbellRows(v) {
-    return Object.keys((v && v.per_task) || {}).map((t) => {
-      const r = v.per_task[t];
-      return { task: t, king: r.king, cand: r.candidate, n: r.n, c_only: r.c_only, k_only: r.k_only, d: r.candidate - r.king };
-    }).sort((a, b) => b.d - a.d || a.task.localeCompare(b.task));
-  }
-  function dumbbellChart(holder, W, v) {
-    const rows = dumbbellRows(v);
-    if (!rows.length) { holder.append(h("div", { class: "empty", text: "No per-task results yet." })); return; }
-    const kingC = cssVar("--king"), candC = cssVar("--cand"), surface = cssVar("--surface-1");
-    holder.append(h("div", { class: "legend" },
-      h("span", null, h("span", { class: "sw", style: null, "data-c": "king" }), "King"),
-      h("span", null, h("span", { class: "sw", style: null, "data-c": "cand" }), "Candidate")));
-    holder.querySelector('[data-c="king"]').style.background = kingC;
-    holder.querySelector('[data-c="cand"]').style.background = candC;
-    const rowH = 26, labW = Math.min(150, Math.round(W * 0.4)), m = { l: labW, r: 44, t: 6, b: 26 };
-    const H = m.t + rows.length * rowH + m.b;
-    const iw = W - m.l - m.r;
-    const x = (p) => m.l + p * iw;
-    const svgEl = s("svg", { viewBox: "0 0 " + W + " " + H, width: W, height: H, role: "img", "aria-label": "Per-task success, candidate versus king" });
-    [0, 0.25, 0.5, 0.75, 1].forEach((t) => {
-      svgEl.append(s("line", { class: t === 0 ? "base" : "gridline", x1: x(t), x2: x(t), y1: m.t, y2: H - m.b }));
-      svgEl.append(s("text", { x: x(t), y: H - m.b + 16, "text-anchor": "middle" }, Math.round(t * 100) + "%"));
-    });
-    const tip = tipLayer(holder);
-    rows.forEach((r, i) => {
-      const cy = m.t + i * rowH + rowH / 2;
-      svgEl.append(s("text", { class: "lab", x: m.l - 10, y: cy + 4, "text-anchor": "end" }, shortTask(r.task)));
-      svgEl.append(s("line", { x1: x(r.king), x2: x(r.cand), y1: cy, y2: cy, stroke: cssVar("--baseline"), "stroke-width": 2, "stroke-linecap": "round" }));
-      svgEl.append(s("circle", { cx: x(r.king), cy, r: 5, fill: kingC, stroke: surface, "stroke-width": 2 }));
-      svgEl.append(s("circle", { cx: x(r.cand), cy, r: 5, fill: candC, stroke: surface, "stroke-width": 2 }));
-      if (i === 0 || i === rows.length - 1) {
-        svgEl.append(s("text", { class: "strong", x: W - m.r + 6, y: cy + 4 }, pts(r.d * 100, 0)));
-      }
-      const hit = s("rect", { class: "hit", x: 0, y: cy - rowH / 2, width: W, height: rowH, tabindex: 0, role: "button",
-        "aria-label": r.task + ": candidate " + pct(r.cand) + ", king " + pct(r.king) });
-      bindHit(hit, tip, holder, (px, py) => tip.show(px, py, r.task, [
-        { label: "Candidate", value: pct(r.cand), color: candC },
-        { label: "King", value: pct(r.king), color: kingC },
-        { label: "Δ", value: pts(r.d * 100, 1) + " pts" },
-        { label: "Units", value: String(r.n) },
-        { label: "Only candidate / only king", value: r.c_only + " / " + r.k_only },
-      ]));
-      svgEl.append(hit);
-    });
-    holder.insertBefore(svgEl, holder.querySelector(".tip"));
-  }
-  function dumbbellTable(v) {
-    const rows = dumbbellRows(v);
-    if (!rows.length) return h("div", { class: "empty", text: "No per-task results yet." });
-    return h("div", { class: "tablewrap" }, h("table", null,
-      h("thead", null, h("tr", null, ["Task", "Candidate", "King", "Δ pts", "Units", "Only cand.", "Only king"].map((t, i) => h("th", { class: i ? "num" : null, text: t })))),
-      h("tbody", null, rows.map((r) => h("tr", null, h("td", { text: r.task }), h("td", { class: "num", text: pct(r.cand) }), h("td", { class: "num", text: pct(r.king) }),
-        h("td", { class: "num", text: pts(r.d * 100) }), h("td", { class: "num", text: String(r.n) }), h("td", { class: "num", text: String(r.c_only) }), h("td", { class: "num", text: String(r.k_only) }))))));
-  }
-
-  boot();
+  if (typeof window !== "undefined" && window.__ATTUNE_TEST__) window.__ATTUNE_TEST__({ setState: (st, sig) => { STATE = st; SIG = sig; RAW = new Uint8Array(1); BLOB = { salt: "x" }; SIG_SRC = "live"; }, render, setTab: (t) => { UI.tab = t; }, openAll: () => { ((STATE.binpick || {}).methods || []).forEach((m) => { UI.open[m.id] = true; }); } });
+  else boot();
 })();
