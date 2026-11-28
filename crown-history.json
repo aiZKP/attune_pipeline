@@ -363,6 +363,26 @@
       "name": "vector-validator",
       "from": "2026-11-24T15:52:54Z",
       "to": "2026-11-28T09:06:53Z"
+    },
+    {
+      "at": "2026-11-28T12:29:02Z",
+      "kind": "docs-page",
+      "page": "docs/reference/glossary",
+      "now": null,
+      "chars": [
+        6352,
+        8180
+      ]
+    },
+    {
+      "at": "2026-11-28T12:29:02Z",
+      "kind": "docs-page",
+      "page": "home",
+      "now": null,
+      "chars": [
+        2056,
+        2011
+      ]
     }
   ]
 }
