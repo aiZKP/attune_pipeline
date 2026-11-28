@@ -75,7 +75,9 @@
     }
   },
   "watch": {
-    "errors": [],
+    "errors": [
+      "whitepaper: HTTPError"
+    ],
     "branches": {
       "vector-orchestrator": {
         "main": "9b14b234bf3bd5ea4aa4d0a06632647927550314",
@@ -230,8 +232,8 @@
         "gone": true
       },
       "docs/reference/glossary": {
-        "sha": "c72251d0506b",
-        "chars": 8180
+        "sha": "160ac4efc299",
+        "chars": 8185
       },
       "docs/reference/the-record": {
         "sha": null,
@@ -295,16 +297,10 @@
     },
     "interval_min": 1
   },
-  "checked_at": "2026-11-28T17:58:02Z",
+  "checked_at": "2026-11-28T17:59:02Z",
   "checked_by": "local",
-  "changed_at": "2026-11-28T17:58:02Z",
+  "changed_at": "2026-11-28T17:59:02Z",
   "alerts": [
-    {
-      "at": "2026-11-24T13:22:02Z",
-      "kind": "docs-new-page",
-      "path": "docs/expert-scripts/build",
-      "text": "A new page in the organisers' docs: https://vector.robotensor.ai/docs/expert-scripts/build"
-    },
     {
       "at": "2026-11-24T13:22:02Z",
       "kind": "docs-new-page",
@@ -512,6 +508,17 @@
         2011
       ],
       "text": "The organisers' page 'home' changed its text (2056 -> 2011 characters)"
+    },
+    {
+      "at": "2026-11-28T17:59:02Z",
+      "kind": "docs-page",
+      "page": "docs/reference/glossary",
+      "now": null,
+      "chars": [
+        8180,
+        8185
+      ],
+      "text": "The organisers' page 'docs/reference/glossary' changed its text (8180 -> 8185 characters)"
     }
   ]
 }
