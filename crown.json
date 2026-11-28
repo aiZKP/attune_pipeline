@@ -75,7 +75,9 @@
     }
   },
   "watch": {
-    "errors": [],
+    "errors": [
+      "whitepaper: HTTPError"
+    ],
     "branches": {
       "vector-orchestrator": {
         "main": "9b14b234bf3bd5ea4aa4d0a06632647927550314",
@@ -292,12 +294,11 @@
       "docs/mining": 404,
       "docs/mining/submit": 404,
       "api/public/docs": 404
-    },
-    "interval_min": 1
+    }
   },
-  "checked_at": "2026-11-28T11:32:01Z",
-  "checked_by": "local",
-  "changed_at": "2026-11-28T11:32:01Z",
+  "checked_at": "2026-11-28T11:32:29Z",
+  "checked_by": "action",
+  "changed_at": "2026-11-28T11:32:29Z",
   "alerts": [
     {
       "at": "2026-11-24T13:22:02Z",
