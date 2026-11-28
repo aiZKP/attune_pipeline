@@ -355,6 +355,9 @@
     return [
       h("div", { class: "grid two" },
         panel(r2 ? "The board: round " + rn : "The board", "Best entries on the organisers' site" + (v.api_at ? " · read " + ago(v.api_at) : ""), boardRows.length ? table(["#", "Entry", { t: "Score", num: true }, { t: "Scenes", num: true }, { t: "Commit block", num: true }, ""], boardRows) : h("div", { class: "empty", text: r2 ? "No entry in round " + rn + " yet." : "Board not read yet." }),
+          r2 && (v.entries || []).length ? h("h3", { text: "Round " + rn + ": every entry so far" }) : null,
+          r2 && (v.entries || []).length ? table(["Entry", "Status", { t: "Scenes", num: true }, { t: "Score so far", num: true }, "Committed", ""],
+            v.entries.map((e) => [owner(e[1]), String(e[2] || "").replace(/_/g, " "), h("td", { class: "num", text: e[4] ? (e[3] || 0) + " / " + e[4] : "—" }), h("td", { class: "num", text: score3(e[5]) }), when(e[7] + "Z"), "UID " + e[0]])) : null,
           prev.length ? h("h3", { text: "Round " + (rn - 1) + " (closed): best entries still in its final check" }) : null,
           prev.length ? table(["#", "Entry", { t: "Score", num: true }, { t: "Scenes", num: true }, { t: "Commit block", num: true }, ""], prev.map(row)) : null,
           r2 && bp.board_note ? h("p", { class: "note", text: bp.board_note }) : null,
