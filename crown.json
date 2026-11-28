@@ -158,10 +158,10 @@
       "attune-subnet": "2026-11-20T14:09:39Z",
       "vector-orchestrator": "2026-11-09T13:12:31Z",
       "RoboTwin-Vector": "2026-10-07T17:29:41Z",
-      "vector-miner": "2026-11-26T07:57:21Z",
-      "vector-env": "2026-11-24T15:52:42Z",
-      "vector-sim": "2026-11-24T15:52:48Z",
-      "vector-validator": "2026-11-24T15:52:54Z",
+      "vector-miner": "2026-11-28T09:06:56Z",
+      "vector-env": "2026-11-28T09:06:54Z",
+      "vector-sim": "2026-11-28T09:06:55Z",
+      "vector-validator": "2026-11-28T09:06:53Z",
       "vector-app": "2026-11-25T16:12:37Z"
     },
     "org_repos": [
@@ -295,34 +295,10 @@
     },
     "interval_min": 1
   },
-  "checked_at": "2026-11-28T09:06:02Z",
+  "checked_at": "2026-11-28T09:07:01Z",
   "checked_by": "local",
-  "changed_at": "2026-11-28T09:06:02Z",
+  "changed_at": "2026-11-28T09:07:01Z",
   "alerts": [
-    {
-      "at": "2026-11-24T13:22:02Z",
-      "kind": "docs-new-page",
-      "path": "docs/contributors",
-      "text": "A new page in the organisers' docs: https://vector.robotensor.ai/docs/contributors"
-    },
-    {
-      "at": "2026-11-24T13:22:02Z",
-      "kind": "docs-new-page",
-      "path": "docs/contributors/account",
-      "text": "A new page in the organisers' docs: https://vector.robotensor.ai/docs/contributors/account"
-    },
-    {
-      "at": "2026-11-24T13:22:02Z",
-      "kind": "docs-new-page",
-      "path": "docs/contributors/console",
-      "text": "A new page in the organisers' docs: https://vector.robotensor.ai/docs/contributors/console"
-    },
-    {
-      "at": "2026-11-24T13:22:02Z",
-      "kind": "docs-new-page",
-      "path": "docs/contributors/points",
-      "text": "A new page in the organisers' docs: https://vector.robotensor.ai/docs/contributors/points"
-    },
     {
       "at": "2026-11-24T13:22:02Z",
       "kind": "docs-new-page",
@@ -494,6 +470,38 @@
         6352
       ],
       "text": "The organisers' page 'docs/reference/glossary' changed its text (6165 -> 6352 characters)"
+    },
+    {
+      "at": "2026-11-28T09:07:01Z",
+      "kind": "repo-push",
+      "name": "vector-env",
+      "from": "2026-11-24T15:52:42Z",
+      "to": "2026-11-28T09:06:54Z",
+      "text": "New commits on robotensor/vector-env (pushed 2026-11-28T09:06:54Z): outside the three pinned repositories, where a new model or benchmark (World Action Model, ICIL) would be built"
+    },
+    {
+      "at": "2026-11-28T09:07:01Z",
+      "kind": "repo-push",
+      "name": "vector-miner",
+      "from": "2026-11-26T07:57:21Z",
+      "to": "2026-11-28T09:06:56Z",
+      "text": "New commits on robotensor/vector-miner (pushed 2026-11-28T09:06:56Z): outside the three pinned repositories, where a new model or benchmark (World Action Model, ICIL) would be built"
+    },
+    {
+      "at": "2026-11-28T09:07:01Z",
+      "kind": "repo-push",
+      "name": "vector-sim",
+      "from": "2026-11-24T15:52:48Z",
+      "to": "2026-11-28T09:06:55Z",
+      "text": "New commits on robotensor/vector-sim (pushed 2026-11-28T09:06:55Z): outside the three pinned repositories, where a new model or benchmark (World Action Model, ICIL) would be built"
+    },
+    {
+      "at": "2026-11-28T09:07:01Z",
+      "kind": "repo-push",
+      "name": "vector-validator",
+      "from": "2026-11-24T15:52:54Z",
+      "to": "2026-11-28T09:06:53Z",
+      "text": "New commits on robotensor/vector-validator (pushed 2026-11-28T09:06:53Z): outside the three pinned repositories, where a new model or benchmark (World Action Model, ICIL) would be built"
     }
   ]
 }
