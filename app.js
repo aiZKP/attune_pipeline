@@ -107,6 +107,14 @@
   const UI = { tab: store.get("attune.v2.tab") || "overview", filter: "all", open: {} };
   const keyName = () => CONF.keyStore + ":" + (BLOB ? BLOB.salt : "");
   const V2 = () => (SIG && SIG.v2) || {};
+  const roundNow = () => { const v = V2(), bp = (STATE && STATE.binpick) || {}; return (v.round && v.round.n) || bp.round || 1; };
+  // The best entries of the running round. The feed says which round its list is for (top_round); a list without it is round 1's.
+  function topNow() {
+    const v = V2(), rn = roundNow();
+    if (v.top_round === undefined || v.top_round === null) return rn >= 2 ? [] : (v.top || []);
+    return v.top_round === rn ? (v.top || []) : [];
+  }
+  function bestR2() { const l = ((STATE && STATE.binpick) || {}).levels2 || []; return l.length ? l[l.length - 1] : null; }
 
   // ------------------------------------------------------------------------------------------ small pieces
   const CHIPS = {
@@ -157,9 +165,19 @@
     return h("div", { class: "kpi" + (accent ? " accent" : "") }, h("div", { class: "k", text: label }), h("div", { class: "v", text: value }), h("div", { class: "d", text: detail || "" }));
   }
   function renderKpis() {
-    const bp = STATE.binpick || {}, v = V2(), top = v.top || [], best = bestPoint(), pl = STATE.pipeline || {}, en = pl.entry || {};
-    const ends = (v.round && v.round.ends) || bp.round_ends;
+    const bp = STATE.binpick || {}, v = V2(), top = topNow(), best = bestPoint(), pl = STATE.pipeline || {}, en = pl.entry || {};
+    const ends = (v.round && v.round.ends) || bp.round_ends, rn = roundNow();
     const third = top[2], lead = top[0];
+    if (rn >= 2) {
+      const b2 = bestR2();
+      return h("div", { class: "kpis" },
+        kpi("Our round-" + rn + " score", b2 ? score3(b2.score) : "—", b2 ? b2.name + " · mean of " + fmtInt(b2.picks) + " picks" : (bp.r2_status || "not measured yet"), true),
+        kpi("Goal", "Top 3", "of round " + rn + ": no king and no bar yet"),
+        kpi("Leader", lead ? score3(lead[1]) : "—", lead ? owner(lead[4]) + " · UID " + lead[0] : "no entry in round " + rn + " yet"),
+        kpi("Third place", third ? score3(third[1]) : "—", third ? "a place needs more than this" : "still open"),
+        kpi("Round " + rn + " ends in", until(ends), ends ? when(ends) : ""),
+        kpi("Our entry", en.uid ? "UID " + en.uid : "—", en.fee_paid ? "fee paid" : "registered · not entered · fee " + (en.fee_tao || 0.1) + " TAO"));
+    }
     return h("div", { class: "kpis" },
       kpi("Our best version", best ? pct1(best.solved / best.of) : "—", best ? (pl.best || best.name) + " · " + best.solved + " of " + best.of + " fresh scenes" : "no measurement yet", true),
       kpi("Goal", isNum(bp.goal) ? pct1(bp.goal) : "—", "every scene solved"),
@@ -174,7 +192,7 @@
     const pl = STATE.pipeline || {}, stages = pl.stages || [];
     const idx = stages.findIndex((x) => x.id === pl.stage);
     const running = ((STATE.binpick || {}).methods || []).filter((m) => methodState(m) === "running");
-    return panel("Pipeline: cycle " + (pl.cycle || "—"), "Best version " + (pl.best || "—") + ". One method at a time: kept only if it gains at least twice its noise on 6,000 scenes.",
+    return panel("Pipeline: cycle " + (pl.cycle || "—"), pl.rule_line || ("Best version " + (pl.best || "—") + ". One method at a time: kept only if it gains at least twice its noise on 6,000 scenes."),
       h("ol", { class: "stages" }, stages.map((st, i) => h("li", { class: "stage" + (i < idx ? " done" : i === idx ? " now" : ""), title: st.what || "" },
         h("div", { class: "n", text: st.name }), h("div", { class: "w", text: st.who || "" })))),
       h("div", { class: "note", text: pl.note || "" }),
@@ -218,7 +236,9 @@
       svg.append(s("text", { x: W - R + 6, y: y(r[0]) + (i ? 13 : -3) }, r[1]));
     });
     svg.append(s("path", { class: "line", d: pts.map((p, i) => (i ? "L" : "M") + x(i).toFixed(1) + " " + y(vals[i]).toFixed(1)).join(" ") }));
-    const bestI = vals.indexOf(Math.max.apply(null, vals)), labelAt = new Set([0, bestI, pts.length - 1]);
+    // the best point is labelled only when it is far enough from the last one for both labels to fit
+    const bestI = vals.indexOf(Math.max.apply(null, vals)), labelAt = new Set([0, pts.length - 1]);
+    if (pts.length - 1 - bestI > 2 && bestI > 1) labelAt.add(bestI);
     const every = pts.length > 14 ? 2 : 1;
     const box = h("div", { class: "chartbox" }), tip = h("div", { class: "tip", hidden: true });
     pts.forEach((p, i) => {
@@ -246,16 +266,33 @@
     const key = /KEY|BOARD|ACTIVE|PUBLIC|MAINNET/.test(a.text || "");
     return h("li", { class: key ? "key" : null }, h("span", { class: "t", text: when(a.at) }), String(a.text || "").slice(0, 420));
   }
+  function renderTask() {
+    const t = (STATE.binpick || {}).task2;
+    if (!t || roundNow() < 2) return null;
+    return panel(t.title || "Round 2: the task", t.sub || "",
+      table(["", "Round 1 (closed)", "Round 2 (running)"], (t.rows || []).map((r) => [h("strong", { text: r[0] }), r[1], r[2]])),
+      t.note ? h("p", { class: "note", text: t.note }) : null);
+  }
+  function r2Versions() {
+    const l = (STATE.binpick || {}).levels2 || [];
+    if (!l.length) return null;
+    return panel("Round 2: our measured versions", "Mean pick score on fresh pile scenes (1.0 would be every target picked at once)",
+      table(["Version", { t: "Score", num: true }, { t: "Picks", num: true }, { t: "Picked", num: true }, { t: "Mean robot time", num: true }, { t: "Parts out", num: true }, "Note"],
+        l.slice().reverse().map((x) => [x.name, h("td", { class: "num", text: score3(x.score) }), h("td", { class: "num", text: fmtInt(x.picks) }), h("td", { class: "num", text: isNum(x.picked) ? pct1(x.picked) : "—" }),
+          h("td", { class: "num", text: isNum(x.time_s) ? x.time_s.toFixed(2) + " s" : "—" }), h("td", { class: "num", text: isNum(x.outs) ? String(x.outs) : "—" }), x.note || ""])));
+  }
   function renderOverview() {
     const v = V2(), alerts = (v.alerts || (SIG && SIG.alerts) || []).slice().reverse();
     const team = ((v.discord || {}).team || []).slice().reverse();
+    const r2 = roundNow() >= 2;
     return [
+      renderTask(), r2Versions(),
       h("div", { class: "grid two" }, renderPipeline(),
         panel("Latest from the organisers", "Their messages in the SN58 channel",
           team.length ? h("ul", { class: "feed" }, team.slice(0, 2).map((m) => h("li", { class: "key" }, h("span", { class: "t", text: m.at }), h("span", { class: "who", text: m.who }), m.text))) : h("div", { class: "empty", text: "Nothing yet." }))),
       renderMachines(),
       h("div", { class: "grid two" },
-        panel("Score progress", "Share of fresh scenes solved by each measured version", scoreChart()),
+        panel(r2 ? "Round 1 (closed): score progress" : "Score progress", "Share of fresh scenes solved by each measured version" + (r2 ? "; round 2 is scored differently" : ""), scoreChart()),
         panel("Latest alerts", "From the watches (site, code, chain, Discord)",
           alerts.length ? h("ul", { class: "feed" }, alerts.slice(0, 4).map((a) => alertItem({ at: a.at, text: String(a.text || "").slice(0, 230) + (String(a.text || "").length > 230 ? "…" : "") }))) : h("div", { class: "empty", text: "No alerts." }))),
     ];
@@ -263,7 +300,12 @@
 
   // ------------------------------------------------------------------------------------------ methods
   function renderMethods() {
-    const ms = ((STATE.binpick || {}).methods || []).slice().reverse();
+    const bp = STATE.binpick || {}, r2 = roundNow() >= 2;
+    const ms2 = (bp.methods || []).filter((m) => m.round === 2).slice().reverse();
+    const ms = (bp.methods || []).filter((m) => (m.round || 1) === 1).slice().reverse();
+    const head2 = r2 ? panel("Round 2 methods, newest first", "One method at a time against the base on the same pile scenes; kept only if the mean scene-score gain is at least twice its standard error.",
+      ms2.length ? table(["Method", { t: "Cycle", num: true }, "Status", "What it is", "Result"], ms2.map((m) => [h("span", { class: "mono", text: m.id }), h("td", { class: "num", text: m.cycle || "—" }), chip(methodState(m)), m.title || "", m.result || "—"]))
+        : h("div", { class: "empty", text: bp.r2_methods_note || "No round-2 method yet." })) : null;
     const counts = {};
     ms.forEach((m) => { const st = methodState(m); counts[st] = (counts[st] || 0) + 1; });
     const order = ["all", "running", "kept", "banned", "invalid", "queued", "research", "tested", "replaced"];
@@ -283,7 +325,7 @@
         rows.push(h("tr", { class: "detail" }, h("td", { colspan: 5 }, dl)));
       }
     });
-    return [panel("Methods, newest first", "One method at a time against the best version on 6,000 scenes; kept only if gained − lost is at least 2·√(gained + lost). Click a row for the details.", filters,
+    return [head2, panel(r2 ? "Round 1 methods (closed), newest first" : "Methods, newest first", "One method at a time against the best version on 6,000 scenes; kept only if gained − lost is at least 2·√(gained + lost). Click a row for the details.", filters,
       table(["Method", { t: "Cycle", num: true }, "Status", "What it is", "On 6,000 scenes: before → after (gained, lost, bar)"], rows))];
   }
 
@@ -298,9 +340,13 @@
 
   // ------------------------------------------------------------------------------------------ monitoring
   function renderMonitoring() {
-    const v = V2(), top = v.top || [], counts = v.counts || {}, rules = v.rules || {}, slot = v.slot || {}, vault = v.vault || {}, en = (STATE.pipeline || {}).entry || {};
-    const best = bestPoint();
-    const boardRows = top.map((t, i) => [String(i + 1), owner(t[4]), h("td", { class: "num", text: score3(t[1]) }), h("td", { class: "num", text: fmtInt(t[2]) }), h("td", { class: "num", text: fmtInt(t[3]) }), "UID " + t[0]]);
+    const v = V2(), top = topNow(), counts = v.counts || {}, rules = v.rules || {}, slot = v.slot || {}, vault = v.vault || {}, en = (STATE.pipeline || {}).entry || {};
+    const rn = roundNow(), r2 = rn >= 2, bp = STATE.binpick || {}, b2 = bestR2();
+    const best = r2 ? null : bestPoint();
+    const row = (t, i) => [String(i + 1), owner(t[4]), h("td", { class: "num", text: score3(t[1]) }), h("td", { class: "num", text: fmtInt(t[2]) }), h("td", { class: "num", text: fmtInt(t[3]) }), "UID " + t[0]];
+    const boardRows = top.map(row);
+    if (r2 && b2) boardRows.push(["—", "ours (" + b2.name + ", measured here, not entered)", h("td", { class: "num", text: score3(b2.score) }), h("td", { class: "num", text: fmtInt(b2.picks) }), h("td", { class: "num", text: "—" }), en.uid ? "UID " + en.uid : ""]);
+    const prev = r2 ? (v.top_prev || []) : [];
     if (best) boardRows.push(["—", "ours (" + (((STATE.pipeline || {}).best) || best.name) + ", measured here, not entered)", h("td", { class: "num", text: score3(best.solved / best.of) }), h("td", { class: "num", text: fmtInt(best.of) }), h("td", { class: "num", text: "—" }), en.uid ? "UID " + en.uid : ""]);
     const shares = (rules.rank_shares || []).map((x) => Math.round(100 * x) + "%").join(" / ");
     const kv = (pairs) => { const dl = h("dl", { class: "kv" }); pairs.forEach((p) => { if (p[1] !== null && p[1] !== undefined && p[1] !== "") dl.append(h("dt", { text: p[0] }), h("dd", { text: String(p[1]) })); }); return dl; };
@@ -308,9 +354,12 @@
     const alerts = (v.alerts || (SIG && SIG.alerts) || []).slice().reverse();
     return [
       h("div", { class: "grid two" },
-        panel("The board", "Best entries on the organisers' site" + (v.api_at ? " · read " + ago(v.api_at) : ""), boardRows.length ? table(["#", "Entry", { t: "Score", num: true }, { t: "Scenes", num: true }, { t: "Commit block", num: true }, ""], boardRows) : h("div", { class: "empty", text: "Board not read yet." }),
+        panel(r2 ? "The board: round " + rn : "The board", "Best entries on the organisers' site" + (v.api_at ? " · read " + ago(v.api_at) : ""), boardRows.length ? table(["#", "Entry", { t: "Score", num: true }, { t: "Scenes", num: true }, { t: "Commit block", num: true }, ""], boardRows) : h("div", { class: "empty", text: r2 ? "No entry in round " + rn + " yet." : "Board not read yet." }),
+          prev.length ? h("h3", { text: "Round " + (rn - 1) + " (closed): best entries still in its final check" }) : null,
+          prev.length ? table(["#", "Entry", { t: "Score", num: true }, { t: "Scenes", num: true }, { t: "Commit block", num: true }, ""], prev.map(row)) : null,
+          r2 && bp.board_note ? h("p", { class: "note", text: bp.board_note }) : null,
           h("h3", { text: "Round and entries" }),
-          kv([["Round", v.round ? v.round.n + " · ends " + when(v.round.ends) + " (in " + until(v.round.ends) + ")" : null], ["Entries scored", counts.scored], ["Being played now", counts.phase1], ["Invalid / unpaid", (counts.invalid || 0) + " / " + (counts.unpaid || 0)], ["Scenes per entry", rules.scenes ? rules.scenes + ", then " + rules.phase2_scenes + " re-run on the organisers' side" : null], ["Pay split of the top three", shares], ["Next round's skill (bin-picking-v2)", v.skills && "bin-picking-v2" in v.skills ? (v.skills["bin-picking-v2"] ? "ACTIVE" : "listed, switched off") : null]])),
+          kv([["Round", v.round ? v.round.n + " · ends " + when(v.round.ends) + " (in " + until(v.round.ends) + ")" : null], ["Entries scored", counts.scored], ["Being played now", counts.phase1], ["Invalid / unpaid", (counts.invalid || 0) + " / " + (counts.unpaid || 0)], ["Scenes per entry", r2 && bp.sizes2 ? bp.sizes2 : rules.scenes ? rules.scenes + ", then " + rules.phase2_scenes + " re-run on the organisers' side" : null], ["Pay split of the top three", shares], r2 ? ["Final check of round " + (rn - 1), (counts.passed || 0) + " passed, " + (counts.disqualified || 0) + " refused, " + (counts.scored || 0) + " waiting"] : ["Next round's skill (bin-picking-v2)", v.skills && "bin-picking-v2" in v.skills ? (v.skills["bin-picking-v2"] ? "ACTIVE" : "listed, switched off") : null]])),
         panel("Fee and our slot", "What an entry needs",
           kv([["Our UID", slot.uid], ["Registered at block", fmtInt(slot.registered_block)], ["Entry fee", ((v.fee && v.fee.tao) || en.fee_tao || 0.1) + " TAO per entry"], ["Fee paid", en.fee_paid ? "yes" : "not yet"], ["Image pushed", en.image_pushed ? "yes" : "not yet"], ["Candidate", en.candidate], ["Fee vault holds", isNum(vault.tao) ? vault.tao + " TAO (" + Math.round(vault.tao / 0.1) + " fees)" : null], ["Chain head", fmtInt(slot.head)]]),
           en.deadline_note ? h("p", { class: "note", text: en.deadline_note }) : null,
@@ -348,7 +397,7 @@
     ];
     const cls = o.by_class || {}, outc = o.outcomes || {}, ways = vf.ways_of_success || {};
     return [
-      panel("Verification of the best version", "Cycle " + vf.cycle + " · image " + (img.tag || "—") + " · final set " + ((vf.set || {}).seed || "—") + ": " + (o.successes || "—") + " of " + ((vf.set || {}).scenes || "—") + " solved" + (o.ci95 ? " (95% " + o.ci95.map((x) => (100 * x).toFixed(1)).join("–") + "%)" : ""),
+      panel(roundNow() >= 2 ? "Round 1's last version: verification" : "Verification of the best version", "Cycle " + vf.cycle + " · image " + (img.tag || "—") + " · final set " + ((vf.set || {}).seed || "—") + ": " + (o.successes || "—") + " of " + ((vf.set || {}).scenes || "—") + " solved" + (o.ci95 ? " (95% " + o.ci95.map((x) => (100 * x).toFixed(1)).join("–") + "%)" : ""),
         table(["Check", "Limit", "Measured"], rows)),
       h("div", { class: "grid two" },
         panel("By kind of scene", "Hardest class that applies", table(["Class", { t: "Solved", num: true }, { t: "Of", num: true }, { t: "Share", num: true }], Object.keys(cls).map((k) => [k, h("td", { class: "num", text: cls[k][0] }), h("td", { class: "num", text: cls[k][1] }), h("td", { class: "num", text: pct1(cls[k][0] / cls[k][1]) })]))),
@@ -365,10 +414,10 @@
     const v2on = v.skills && v.skills["bin-picking-v2"];
     return [
       panel("Round 2: what the organisers said", (a.who || "") + " · " + when(a.at), h("p", { class: "note", text: a.text || "" }),
-        h("p", null, chip(v2on ? "running" : "queued", v2on ? "bin-picking-v2 is ACTIVE" : "bin-picking-v2 is listed, not yet active")),
+        h("p", null, roundNow() >= 2 ? chip("running", "Round " + roundNow() + " is running") : chip(v2on ? "running" : "queued", v2on ? "bin-picking-v2 is ACTIVE" : "bin-picking-v2 is listed, not yet active")),
         h("ul", { class: "feed" }, (r.known || []).map((k) => h("li", { text: k })))),
       h("div", { class: "grid two" },
-        panel("Day-one plan", "In order; nothing here waits for us except the organisers' release", table(["Step", "What", "State"], (r.plan || []).map((p) => [p.step, p.detail, chip(/ready/.test(p.state || "") ? "ready" : /waiting/.test(p.state || "") ? "queued" : "planned", p.state)]))),
+        panel(roundNow() >= 2 ? "Round-2 plan" : "Day-one plan", roundNow() >= 2 ? "In order" : "In order; nothing here waits for us except the organisers' release", table(["Step", "What", "State"], (r.plan || []).map((p) => [p.step, p.detail, chip(/ready/.test(p.state || "") ? "ready" : /waiting/.test(p.state || "") ? "queued" : "planned", p.state)]))),
         panel("Lessons from round 1", "What we change", (r.lessons || []).map((l) => h("div", { class: "finding" }, h("div", { class: "title", text: l.title }), h("p", { text: l.text }))))),
       panel("What we carry over", "", h("ul", { class: "feed" }, (r.assets || []).map((k) => h("li", { text: k })))),
     ];
