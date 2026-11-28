@@ -75,7 +75,9 @@
     }
   },
   "watch": {
-    "errors": [],
+    "errors": [
+      "whitepaper: HTTPError"
+    ],
     "branches": {
       "vector-orchestrator": {
         "main": "9b14b234bf3bd5ea4aa4d0a06632647927550314",
@@ -186,8 +188,8 @@
     },
     "docs_pages": {
       "home": {
-        "sha": "993ce5fea989",
-        "chars": 2056
+        "sha": "c344b5a0e568",
+        "chars": 2011
       },
       "docs/guide/the-tasks": {
         "sha": null,
@@ -230,8 +232,8 @@
         "gone": true
       },
       "docs/reference/glossary": {
-        "sha": "0b3bb039e64e",
-        "chars": 6352
+        "sha": "c72251d0506b",
+        "chars": 8180
       },
       "docs/reference/the-record": {
         "sha": null,
@@ -295,22 +297,10 @@
     },
     "interval_min": 1
   },
-  "checked_at": "2026-11-28T12:28:01Z",
+  "checked_at": "2026-11-28T12:29:02Z",
   "checked_by": "local",
-  "changed_at": "2026-11-28T12:28:01Z",
+  "changed_at": "2026-11-28T12:29:02Z",
   "alerts": [
-    {
-      "at": "2026-11-24T13:22:02Z",
-      "kind": "docs-new-page",
-      "path": "docs/contributors/wallet",
-      "text": "A new page in the organisers' docs: https://vector.robotensor.ai/docs/contributors/wallet"
-    },
-    {
-      "at": "2026-11-24T13:22:02Z",
-      "kind": "docs-new-page",
-      "path": "docs/expert-scripts",
-      "text": "A new page in the organisers' docs: https://vector.robotensor.ai/docs/expert-scripts"
-    },
     {
       "at": "2026-11-24T13:22:02Z",
       "kind": "docs-new-page",
@@ -502,6 +492,28 @@
       "from": "2026-11-24T15:52:54Z",
       "to": "2026-11-28T09:06:53Z",
       "text": "New commits on robotensor/vector-validator (pushed 2026-11-28T09:06:53Z): outside the three pinned repositories, where a new model or benchmark (World Action Model, ICIL) would be built"
+    },
+    {
+      "at": "2026-11-28T12:29:02Z",
+      "kind": "docs-page",
+      "page": "docs/reference/glossary",
+      "now": null,
+      "chars": [
+        6352,
+        8180
+      ],
+      "text": "The organisers' page 'docs/reference/glossary' changed its text (6352 -> 8180 characters)"
+    },
+    {
+      "at": "2026-11-28T12:29:02Z",
+      "kind": "docs-page",
+      "page": "home",
+      "now": null,
+      "chars": [
+        2056,
+        2011
+      ],
+      "text": "The organisers' page 'home' changed its text (2056 -> 2011 characters)"
     }
   ]
 }
